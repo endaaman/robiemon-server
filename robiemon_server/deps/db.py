@@ -1,4 +1,10 @@
 from fastapi import Request
 
-def get_db(request: Request):
-    return request.state.db
+from ..middlewares.db import SessionLocal
+
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
