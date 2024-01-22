@@ -25,6 +25,12 @@ logger = logging.getLogger('uvicorn')
 
 
 
+class Task(BaseModel):
+    timestamp: int
+    image: str
+    status: str
+
+
 tasks = []
 tasks_queue = asyncio.Queue()
 async def worker():
@@ -86,6 +92,7 @@ async def get_results_bt(item: Item):
 async def send_status():
     while True:
         s = json.dumps(tasks)
+        print('send', s)
         yield f"data: {s}\n\n"
         await asyncio.sleep(1)
 
