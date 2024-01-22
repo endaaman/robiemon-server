@@ -4,13 +4,14 @@ import json
 import threading
 import logging
 import asyncio
-from functools import lru_cache
+import shutil
+import time
+from datetime import datetime
+
 import uvicorn
-
-from pydantic import BaseModel
-
 from fastapi import FastAPI, HTTPException, Depends, Request, Header, File, UploadFile, Response
-from fastapi.responses import StreamingResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import StreamingResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -23,15 +24,40 @@ from .models import BTResult
 
 logger = logging.getLogger('uvicorn')
 
+STATUS_PENDING = 'pending'
+STATUS_PROCESSING = 'processing'
+STATUS_DONE = 'done'
 
 
 class Task(BaseModel):
     timestamp: int
     image: str
+    mode: str
     status: str
 
 
-tasks = []
+tasks = [
+    Task(
+        timestamp=1705901087,
+        image='1705901087.png',
+        mode='bt',
+        status=STATUS_DONE,
+    ),
+
+    Task(
+        timestamp=1705903831,
+        image='1705903831.png',
+        mode='bt',
+        status=STATUS_PROCESSING,
+    ),
+
+    Task(
+        timestamp=1705904399,
+        image='1705904399.png',
+        mode='bt',
+        status=STATUS_PENDING,
+    )
+]
 tasks_queue = asyncio.Queue()
 async def worker():
     while True:
@@ -58,14 +84,16 @@ app.add_middleware(
     allow_headers=['*'],
 )
 
-@app.on_event("startup")
+@app.on_event('startup')
 async def on_startup():
+    os.makedirs('data/uploads', exist_ok=True)
     asyncio.create_task(worker())  # ワーカータスクを起動
 
+
+app.mount('/uploads', StaticFiles(directory=config.UPLOAD_DIR), name='uploads')
+
 @app.get('/')
-async def root(
-    # S:BTService=Depends()
-):
+async def root():
     return {
         'message': 'ok',
     }
@@ -91,17 +119,9 @@ async def get_results_bt(item: Item):
 
 async def send_status():
     while True:
-        s = json.dumps(tasks)
-        print('send', s)
+        s = json.dumps([t.dict() for t in tasks])
         yield f"data: {s}\n\n"
         await asyncio.sleep(1)
-
-# @app.get('/status')
-# async def status() -> StreamingResponse:
-#     return StreamingResponse(
-#         str(send_status()),
-#         media_type='text/event-stream',
-#     )
 
 @app.get('/status')
 async def events(response: Response):
@@ -142,17 +162,24 @@ class SleepTask(BaseTask):
 
 
 @app.post('/predict')
-async def predict():
-# async def predict(file: UploadFile = File(...), db: Session = Depends(get_db)):
-    # file_location = f"uploads/{file.filename}"
-    # with open(file_location, 'wb+') as file_object:
-    #     file_object.write(file.file.read())
+async def predict(file: UploadFile = File(...)):
+    # timestamp = int(datetime.now().timestamp())
+    timestamp = int(time.time())
+    filename = f'{timestamp}.png'
+    with open(os.path.join(config.UPLOAD_DIR, filename), 'wb') as buffer:
+        shutil.copyfileobj(file.file, buffer)
 
-    print('pred')
-    # task = SleepTask('sleep')
-    print('pred ok')
-    # tasks_queue.put(task)
-    return []
+    task = Task(
+        timestamp=timestamp,
+        image=filename,
+        mode='bt',
+        status=STATUS_PENDING,
+    )
+    tasks.append(task)
+
+    return JSONResponse(content={
+        **task.dict()
+    })
 
 
     # db_result = Result(filename=file.filename)
