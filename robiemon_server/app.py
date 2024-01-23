@@ -16,10 +16,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from .middlewares.config import config
-from .middlewares.db import init_db
+from .lib.config import config
+from .lib.db import init_db
+from .lib.task import Task, SleepTask
+
 from .deps.bt import BTService
 from .deps.db import get_db
+from .deps.worker import Worker
 from .models import BTResult, ItemDB
 
 
@@ -59,24 +62,8 @@ tasks = [
         status=STATUS_PENDING,
     )
 ]
-tasks_queue = asyncio.Queue()
-async def worker():
-    while True:
-        task = await tasks_queue.get()
-        await task()
-        tasks_queue.task_done()
 
-global_status = {
-    'bt': [
-        { 'name': 'initial', }
-    ],
-}
-
-
-
-app = FastAPI(
-    dependencies=[]
-)
+app = FastAPI()
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,
@@ -89,13 +76,12 @@ app.add_middleware(
 async def on_startup():
     os.makedirs('data/uploads', exist_ok=True)
     init_db()
-    asyncio.create_task(worker())  # ワーカータスクを起動
-
 
 app.mount('/uploads', StaticFiles(directory=config.UPLOAD_DIR), name='uploads')
 
 @app.get('/')
 async def root():
+    print(worker)
     return {
         'message': 'ok',
     }
@@ -134,32 +120,6 @@ async def events(response: Response):
         send_status(),
         media_type='text/event-stream',
     )
-
-
-class BaseTask(BaseModel):
-    name: str
-    status: str
-
-    def __init__(self, name):
-        super().__init__()
-        self.name = name
-        self.status = 'pending'
-        tasks.append(self)
-
-    # def __dict__(self):
-    #     return ''
-
-    async def run(self):
-        pass
-
-    async def __call__(self):
-        self.status = 'running'
-        await self.run()
-        self.status = 'done'
-
-class SleepTask(BaseTask):
-    async def run(self):
-        await asyncio.sleep(5)
 
 
 
@@ -225,3 +185,11 @@ def read_item(item_id: int, db: Session = Depends(get_db)):
 def read_items(db: Session = Depends(get_db)):
     db_items = db.query(ItemDB).all()
     return db_items
+
+class AddTaskRequest(BaseModel):
+    s: int
+
+@app.post('/tasks')
+async def add_tasks(q: AddTaskRequest, worker: Worker = Depends()):
+    worker.add_task(SleepTask(q.s))
+    return q

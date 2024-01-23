@@ -2,7 +2,7 @@ import datetime
 from pydantic import BaseModel, Field, validator
 from sqlalchemy import Boolean, Column, Integer, Float, String, ForeignKey
 
-from .middlewares.db import Base
+from .lib.db import Base
 
 
 # class Task(Base):
