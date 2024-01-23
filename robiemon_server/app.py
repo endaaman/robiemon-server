@@ -80,8 +80,7 @@ async def on_startup():
 app.mount('/uploads', StaticFiles(directory=config.UPLOAD_DIR), name='uploads')
 
 @app.get('/')
-async def root():
-    print(worker)
+async def root(worker: Worker = Depends()):
     return {
         'message': 'ok',
     }
@@ -191,5 +190,6 @@ class AddTaskRequest(BaseModel):
 
 @app.post('/tasks')
 async def add_tasks(q: AddTaskRequest, worker: Worker = Depends()):
-    worker.add_task(SleepTask(q.s))
+    t = SleepTask(q.s)
+    worker.add_task(t)
     return q

@@ -2,31 +2,29 @@ import asyncio
 import queue
 
 
+global_started = False
+global_queue = asyncio.Queue()
+
 class Worker:
-    def __init__(self):
-        self.started = False
-        self.queue = asyncio.Queue()
-
     def add_task(self, task):
-        if not self.started:
-            print('start worker main loop')
+        global global_started
+        if not global_started:
             asyncio.create_task(self.main_loop())
-            asyncio.create_task(self.queue.join())
+            asyncio.create_task(global_queue.join())
+            global_started = True
 
-        self.queue.put_nowait(task)
+        global_queue.put_nowait(task)
 
     async def initial_dummy_task(self):
         pass
 
     async def main_loop(self):
-        self.queue.put_nowait(self.initial_dummy_task)
-        t = await self.queue.get()
+        global_queue.put_nowait(self.initial_dummy_task)
+        t = await global_queue.get()
         await t()
         # DO NOT call task_done() here.
 
         while True:
-            print('enter')
-            t = await self.queue.get()
+            t = await global_queue.get()
             await t()
-            self.queue.task_done()
-            print('leave')
+            global_queue.task_done()
