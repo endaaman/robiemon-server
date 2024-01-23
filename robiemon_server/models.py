@@ -28,14 +28,14 @@ class BTResult(Base):
     B = Column(Float)
 
 
-class BTResult(BaseModel):
-    id: int
-    original_image: str
-    cam_image: str
-    L: float
-    M: float
-    G: float
-    B: float
+class ItemDB(Base):
+    __tablename__ = 'items'
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String)
+    desc = Column(String)
 
-
-# Base.metadata.create_all(bind=engine)
+class TaskDB(Base):
+    __tablename__ = 'tasks'
+    id = Column(Integer, primary_key=True, index=True)
+    status = Column(String)
+    image = Column(String)

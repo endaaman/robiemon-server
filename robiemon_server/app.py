@@ -16,10 +16,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from .middlewares import config
+from .middlewares.config import config
+from .middlewares.db import init_db
 from .deps.bt import BTService
 from .deps.db import get_db
-from .models import BTResult
+from .models import BTResult, ItemDB
 
 
 logger = logging.getLogger('uvicorn')
@@ -87,6 +88,7 @@ app.add_middleware(
 @app.on_event('startup')
 async def on_startup():
     os.makedirs('data/uploads', exist_ok=True)
+    init_db()
     asyncio.create_task(worker())  # ワーカータスクを起動
 
 
@@ -190,3 +192,36 @@ async def predict(file: UploadFile = File(...)):
     # return {"info": f"file '{file.filename}' saved at '{file_location}'", "id": db_result.id}
 
 
+
+class RequestItemCreate(BaseModel):
+    name: str
+    desc: str
+
+class ResponseItem(BaseModel):
+    id: int
+    name: str
+    desc: str
+
+    class Config:
+        orm_mode = True
+
+
+@app.post('/items', response_model=ResponseItem)
+def create_item(item: RequestItemCreate, db: Session = Depends(get_db)):
+    db_item = ItemDB(**item.dict())
+    db.add(db_item)
+    db.commit()
+    db.refresh(db_item)
+    return db_item
+
+@app.get('/items/{item_id}', response_model=ResponseItem)
+def read_item(item_id: int, db: Session = Depends(get_db)):
+    db_item = db.query(ItemDB).filter(ItemDB.id == item_id).first()
+    if db_item is None:
+        raise HTTPException(status_code=404, detail="Item not found")
+    return db_item
+
+@app.get('/items', response_model=list[ResponseItem])
+def read_items(db: Session = Depends(get_db)):
+    db_items = db.query(ItemDB).all()
+    return db_items
