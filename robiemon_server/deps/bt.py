@@ -1,5 +1,5 @@
-from ..models import BTResult
+from ..models import BTResultDB
 
 class BTService():
-    async def predict(self, image) -> BTResult :
+    async def predict(self, image) -> BTResultDB:
         return

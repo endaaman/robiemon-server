@@ -13,8 +13,10 @@ from fastapi import FastAPI, HTTPException, Depends, Request, Header, File, Uplo
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import StreamingResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
+
+import numpy as np
 
 from .lib.config import config
 from .lib.db import init_db
@@ -23,7 +25,7 @@ from .lib.task import Task, SleepTask
 from .deps.bt import BTService
 from .deps.db import get_db
 from .deps.worker import Worker
-from .models import BTResult, ItemDB
+from .models import BTResultDB, ItemDB
 
 
 logger = logging.getLogger('uvicorn')
@@ -36,8 +38,36 @@ STATUS_DONE = 'done'
 class Task(BaseModel):
     timestamp: int
     image: str
-    mode: str
-    status: str
+    mode: str = Field(..., regex=r'^bt$')
+    status: str = Field(..., regex=r'^pending|processing|done$')
+
+    async def __call__(self, worker, db):
+        if self.status != STATUS_PENDING:
+            print(f'Task {task.timestamp} is not pending')
+            return
+        worker.poll()
+        self.status = STATUS_PROCESSING
+
+        # main task
+        await asyncio.sleep(5)
+        cam_image_path = ''
+        result = np.array([0, 0.8, 0.2, 0.1])
+
+        db_item = BTResultDB(
+            timestamp=self.timestamp,
+            original_image=self.image,
+            cam_image=cam_image_path,
+            L=result[0],
+            M=result[1],
+            G=result[2],
+            B=result[3],
+        )
+        db.add(db_item)
+        db.commit()
+        db.refresh(db_item)
+
+        worker.poll()
+        self.status = STATUS_DONE
 
 
 tasks = [
@@ -63,6 +93,33 @@ tasks = [
     )
 ]
 
+class BTResult(BaseModel):
+    id: int
+    timestamp: int
+    original_image: str
+    cam_image: str
+    L: float
+    M: float
+    G: float
+    B: float
+
+    class Config:
+        orm_mode = True
+
+
+async def get_status(db):
+    bt_results = [
+        BTResult.from_orm(r)
+        for r in db.query(BTResultDB).all()
+    ]
+
+    status = {
+        'tasks': [t.dict() for t in tasks],
+        'bt_results': [r.dict() for r in  bt_results],
+    }
+    return status
+
+
 app = FastAPI()
 app.add_middleware(
     CORSMiddleware,
@@ -79,51 +136,40 @@ async def on_startup():
 
 app.mount('/uploads', StaticFiles(directory=config.UPLOAD_DIR), name='uploads')
 
-@app.get('/')
-async def root(worker: Worker = Depends()):
-    return {
-        'message': 'ok',
-    }
 
-@app.get('/results')
-async def get_results_bt():
-    return global_status
-
-@app.get('/results/bt')
-async def get_results_bt():
-    return global_status['bt']
-
-
-class Item(BaseModel):
-    name: str
-
-@app.post('/results/bt')
-async def get_results_bt(item: Item):
-    print(item)
-    global_status['bt'].append(item.dict())
-    return global_status['bt']
-
-
-async def send_status():
+async def send_status(worker, db):
     while True:
-        s = json.dumps([t.dict() for t in tasks])
-        yield f"data: {s}\n\n"
+        status = await get_status(db)
+        status_str = json.dumps(status)
+        yield f'data: {status_str}\n\n'
         await asyncio.sleep(1)
+        await worker.event()
 
-@app.get('/status')
-async def events(response: Response):
+@app.get('/status_sse')
+async def status_sse(
+    response: Response,
+    worker: Worker = Depends(),
+    db: Session = Depends(get_db),
+):
     response.headers['Cache-Control'] = 'no-cache'
     response.headers['Content-Type'] = 'text/event-stream'
     response.headers['Connection'] = 'keep-alive'
     return StreamingResponse(
-        send_status(),
+        send_status(worker, db),
         media_type='text/event-stream',
     )
 
+@app.get('/status')
+async def status(response: Response):
+    return JSONResponse(content=await get_status())
 
 
 @app.post('/predict')
-async def predict(file: UploadFile = File(...)):
+async def predict(
+    file: UploadFile = File(...),
+    worker:Worker = Depends(),
+    db:Session = Depends(get_db),
+):
     # timestamp = int(datetime.now().timestamp())
     timestamp = int(time.time())
     filename = f'{timestamp}.png'
@@ -137,18 +183,17 @@ async def predict(file: UploadFile = File(...)):
         status=STATUS_PENDING,
     )
     tasks.append(task)
+    worker.add_task(task, worker, db)
+    worker.poll()
 
     return JSONResponse(content={
         **task.dict()
     })
 
 
-    # db_result = Result(filename=file.filename)
-    # db.add(db_result)
-    # db.commit()
-    # db.refresh(db_result)
-
-    # return {"info": f"file '{file.filename}' saved at '{file_location}'", "id": db_result.id}
+@app.get('/results/bt')
+async def read_results(db:Session = Depends(get_db)):
+    return db.query(BTResultDB).all()
 
 
 
@@ -188,8 +233,8 @@ def read_items(db: Session = Depends(get_db)):
 class AddTaskRequest(BaseModel):
     s: int
 
-@app.post('/tasks')
-async def add_tasks(q: AddTaskRequest, worker: Worker = Depends()):
-    t = SleepTask(q.s)
-    worker.add_task(t)
-    return q
+# @app.post('/tasks')
+# async def add_tasks(q: AddTaskRequest, worker: Worker = Depends()):
+#     t = SleepTask(q.s)
+#     worker.add_task(t, 123)
+#     return q

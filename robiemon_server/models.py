@@ -14,11 +14,11 @@ from .lib.db import Base
 
 
 
-class BTResult(Base):
+class BTResultDB(Base):
     __tablename__ = 'bt_results'
 
     id = Column(Integer, primary_key=True, index=True)
-    status = Column(String)
+    timestamp = Column(Integer, index=True)
     original_image = Column(String)
     cam_image = Column(String)
 
