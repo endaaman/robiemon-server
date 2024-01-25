@@ -22,7 +22,6 @@ import torch
 
 from .lib.config import config
 from .lib.db import init_db
-from .lib.task import Task, SleepTask
 
 from .deps.bt import BTService
 from .deps.db import get_db
@@ -48,7 +47,7 @@ class Task(BaseModel):
 
     async def __call__(self, worker, db, bt_service):
         if self.status != STATUS_PENDING:
-            print(f'Task {task.timestamp} is not pending')
+            print(f'Task {self.timestamp} is not pending')
             return
         print('start', self.timestamp)
         self.status = STATUS_PROCESSING
@@ -58,14 +57,15 @@ class Task(BaseModel):
         try:
             result = await bt_service.predict(
                 # 'data/ml/weights/bt_efficientnet_b0_f5.pt',
-                'data/ml/weights/bt_resnetrs50_f0.pt',
+                'data/weights/bt_resnetrs50_f0.pt',
                 os.path.join(config.UPLOAD_DIR, self.image),
             )
             ok = True
         except torch.cuda.OutOfMemoryError as e:
+            print(e)
             self.status = STATUS_TOO_LARGE
         except Exception as e:
-            print('erro', e)
+            print(e)
             self.status = STATUS_ERROR
 
         await asyncio.sleep(5)
@@ -219,17 +219,22 @@ async def predict(
 
 
 @app.get('/results/bt')
-async def read_results(db:Session = Depends(get_db)):
+async def read_result(db:Session = Depends(get_db)):
     return db.query(BTResultDB).all()
 
 @app.delete('/results/bt/{id}')
-async def read_results(id: int, db:Session = Depends(get_db)):
+async def read_results(
+    id: int,
+    worker: Worker = Depends(),
+    db:Session = Depends(get_db)
+):
     db_item = db.query(BTResultDB).filter(BTResultDB.id == id).first()
     if db_item is None:
         raise HTTPException(status_code=404, detail='Item not found')
 
     db.delete(db_item)
     db.commit()
+    worker.poll()
     return JSONResponse(content={
         'message': 'Record deleted'
     })
