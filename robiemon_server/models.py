@@ -18,9 +18,9 @@ class BTResultDB(Base):
     __tablename__ = 'bt_results'
 
     id = Column(Integer, primary_key=True, index=True)
-    timestamp = Column(Integer, index=True)
-    original_image = Column(String)
-    cam_image = Column(String)
+    timestamp = Column(Integer, index=True, nullable=False)
+    original_image = Column(String, nullable=False)
+    cam_image = Column(String, nullable=False)
 
     L = Column(Float)
     M = Column(Float)

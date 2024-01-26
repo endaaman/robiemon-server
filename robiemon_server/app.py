@@ -55,11 +55,18 @@ class Task(BaseModel):
 
         ok = False
         try:
-            result = await bt_service.predict(
+            result, features, cam_image = await bt_service.predict(
                 # 'data/ml/weights/bt_efficientnet_b0_f5.pt',
                 'data/weights/bt_resnetrs50_f0.pt',
                 os.path.join(config.UPLOAD_DIR, self.image),
             )
+            if cam_image:
+                cam_image_name = f'{self.timestamp}.png'
+                print('save cam', os.path.join(config.CAM_DIR, cam_image_name))
+                cam_image.save(os.path.join(config.CAM_DIR, cam_image_name))
+            else:
+                print('NO CAM')
+                cam_image_name = None
             ok = True
         except torch.cuda.OutOfMemoryError as e:
             print(e)
@@ -68,13 +75,14 @@ class Task(BaseModel):
             print(e)
             self.status = STATUS_ERROR
 
-        await asyncio.sleep(5)
+        await asyncio.sleep(1)
+        worker.poll()
 
         if ok:
             db_item = BTResultDB(
                 timestamp=self.timestamp,
                 original_image=self.image,
-                cam_image='',
+                cam_image=cam_image_name,
                 L=result[0],
                 M=result[1],
                 G=result[2],
@@ -152,7 +160,8 @@ app.add_middleware(
 
 @app.on_event('startup')
 async def on_startup():
-    os.makedirs('data/uploads', exist_ok=True)
+    os.makedirs(config.UPLOAD_DIR, exist_ok=True)
+    os.makedirs(config.CAM_DIR, exist_ok=True)
     init_db()
 
 app.mount('/uploads', StaticFiles(directory=config.UPLOAD_DIR), name='uploads')

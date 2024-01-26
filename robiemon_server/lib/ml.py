@@ -16,10 +16,23 @@ from torch import nn
 from torch import optim
 from torch.nn import functional as F
 from torchvision import transforms, models
+import pytorch_grad_cam as CAM
+from pytorch_grad_cam.utils.model_targets import ClassifierOutputTarget
 
 Image.MAX_IMAGE_PIXELS = None
 
 
+
+def get_cam_layers(m, name=None):
+    name = name or m.default_cfg['architecture']
+    if re.match(r'.*efficientnet.*', name):
+        return [m.conv_head]
+    if re.match(r'^resnetrs.*', name):
+        return [m.layer4[-1].act3]
+    if re.match(r'^resnet\d+', name):
+        return [m.layer4[-1].act2]
+    raise RuntimeError('CAM layers are not determined.')
+    return []
 
 class Checkpoint(NamedTuple):
     config: dict
@@ -109,22 +122,46 @@ class BTPredictor(ClsPredictor):
         print('start pred', image_path)
 
         model = self.get_model()
+
+        gradcam = CAM.GradCAM(
+            model=model,
+            target_layers=model.get_cam_layers(),
+            use_cuda=True
+        )
+
         image = Image.open(image_path).convert('RGB')
         t = self.transform(image)[None, ...].to('cuda')
         try:
             with torch.no_grad():
                 oo, features = model(t, activate=True, with_feautres=True)
+            o = oo.detach().cpu().numpy()[0]
+            features = features.detach().cpu().numpy()[0]
         except torch.cuda.OutOfMemoryError as e:
-            raise e
-        finally:
             del t
             del model
+            del gradcam
             torch._C._cuda_clearCublasWorkspaces()
             gc.collect()
             torch.cuda.empty_cache()
-        o = oo.detach().cpu().numpy()[0]
+            raise e
+
+        try:
+            pred_id = np.argmax(o)
+            targets = [ClassifierOutputTarget(pred_id)]
+            mask = gradcam(input_tensor=t, targets=targets)[0]
+            cam_image = Image.fromarray((mask * 255).astype(np.uint8))
+        except torch.cuda.OutOfMemoryError as e:
+            cam_image = None
+        finally:
+            del t
+            del model
+            del gradcam
+            torch._C._cuda_clearCublasWorkspaces()
+            gc.collect()
+            torch.cuda.empty_cache()
+
         print('done pred', image_path)
-        return o
+        return o, features, cam_image
 
 
 @lru_cache

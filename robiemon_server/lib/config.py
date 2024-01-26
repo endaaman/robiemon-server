@@ -9,6 +9,7 @@ class Config(BaseSettings):
     # "sqlite:///./sql_app.db"
     DB_URL: str = 'sqlite:///./data/server.db'
     UPLOAD_DIR: str = 'data/uploads'
+    CAM_DIR: str = 'data/cams'
     DATA_DIR: str = 'data'
 
     class Config:
