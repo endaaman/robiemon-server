@@ -22,6 +22,9 @@ from pytorch_grad_cam.utils.model_targets import ClassifierOutputTarget
 Image.MAX_IMAGE_PIXELS = None
 
 
+using_gpu = torch.cuda.is_available()
+device = torch.device('cuda' if using_gpu else 'cpu')
+
 
 def get_cam_layers(m, name=None):
     name = name or m.default_cfg['architecture']
@@ -96,7 +99,7 @@ class ClsPredictor(BasePredictor):
     def __init__(self, checkpoint_path):
         self.result = None
         self.checkpoint_path = checkpoint_path
-        self.checkpoint: Checkpoint = torch.load(checkpoint_path)
+        self.checkpoint: Checkpoint = torch.load(checkpoint_path, map_location=device)
 
         mean = self.checkpoint.config.get('mean', 0.7)
         std = self.checkpoint.config.get('std', 0.2)
@@ -112,7 +115,7 @@ class ClsPredictor(BasePredictor):
             num_classes=self.checkpoint.config['num_classes']
         )
         model.load_state_dict(self.checkpoint.model_state)
-        model = model.eval().to('cuda')
+        model = model.eval().to(device)
         return model
 
 
@@ -126,11 +129,11 @@ class BTPredictor(ClsPredictor):
         gradcam = CAM.GradCAM(
             model=model,
             target_layers=model.get_cam_layers(),
-            use_cuda=True
+            use_cuda=using_gpu
         )
 
         image = Image.open(image_path).convert('RGB')
-        t = self.transform(image)[None, ...].to('cuda')
+        t = self.transform(image)[None, ...].to(device)
         try:
             with torch.no_grad():
                 oo, features = model(t, activate=True, with_feautres=True)
@@ -156,9 +159,10 @@ class BTPredictor(ClsPredictor):
             del t
             del model
             del gradcam
-            torch._C._cuda_clearCublasWorkspaces()
             gc.collect()
-            torch.cuda.empty_cache()
+            if using_gpu:
+                torch._C._cuda_clearCublasWorkspaces()
+                torch.cuda.empty_cache()
 
         print('done pred', image_path)
         return o, features, cam_image

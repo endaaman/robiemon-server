@@ -40,62 +40,63 @@ STATUS_ERROR = 'error'
 
 class Task(BaseModel):
     timestamp: int
-    tag: str
+    hash: str
     image: str
     mode: str = Field(..., regex=r'^bt$')
     status: str = Field(..., regex=r'^pending|processing|done$')
 
-    async def __call__(self, worker, db, bt_service):
-        if self.status != STATUS_PENDING:
-            print(f'Task {self.timestamp} is not pending')
-            return
-        print('start', self.timestamp)
-        self.status = STATUS_PROCESSING
-        worker.poll()
 
-        ok = False
-        try:
-            result, features, cam_image = await bt_service.predict(
-                # 'data/ml/weights/bt_efficientnet_b0_f5.pt',
-                'data/weights/bt_resnetrs50_f0.pt',
-                os.path.join(config.UPLOAD_DIR, self.image),
-            )
-            if cam_image:
-                cam_image_name = f'{self.timestamp}.png'
-                print('save cam', os.path.join(config.CAM_DIR, cam_image_name))
-                cam_image.save(os.path.join(config.CAM_DIR, cam_image_name))
-            else:
-                print('NO CAM')
-                cam_image_name = None
-            ok = True
-        except torch.cuda.OutOfMemoryError as e:
-            print(e)
-            self.status = STATUS_TOO_LARGE
-        except Exception as e:
-            print(e)
-            self.status = STATUS_ERROR
+async def process_task(task, worker, db, bt_service):
+    if task.status != STATUS_PENDING:
+        print(f'Task {task.timestamp} is not pending')
+        return
+    print('start', task.timestamp)
+    task.status = STATUS_PROCESSING
+    worker.poll()
 
-        await asyncio.sleep(1)
-        worker.poll()
+    ok = False
+    try:
+        result, features, cam_image = await bt_service.predict(
+            # 'data/ml/weights/bt_efficientnet_b0_f5.pt',
+            'data/weights/bt_resnetrs50_f0.pt',
+            os.path.join(config.UPLOAD_DIR, task.image),
+        )
+        if cam_image:
+            cam_image_name = f'{task.timestamp}.png'
+            print('save cam', os.path.join(config.CAM_DIR, cam_image_name))
+            cam_image.save(os.path.join(config.CAM_DIR, cam_image_name))
+        else:
+            print('NO CAM')
+            cam_image_name = None
+        ok = True
+    except torch.cuda.OutOfMemoryError as e:
+        print(e)
+        task.status = STATUS_TOO_LARGE
+    except Exception as e:
+        print(e)
+        task.status = STATUS_ERROR
 
-        if ok:
-            db_item = BTResultDB(
-                timestamp=self.timestamp,
-                original_image=self.image,
-                cam_image=cam_image_name,
-                L=result[0],
-                M=result[1],
-                G=result[2],
-                B=result[3],
-            )
-            db.add(db_item)
-            db.commit()
-            db.refresh(db_item)
+    await asyncio.sleep(1)
+    worker.poll()
 
-            self.status = STATUS_DONE
+    if ok:
+        db_item = BTResultDB(
+            timestamp=task.timestamp,
+            original_image=task.image,
+            cam_image=cam_image_name,
+            L=result[0],
+            M=result[1],
+            G=result[2],
+            B=result[3],
+        )
+        db.add(db_item)
+        db.commit()
+        db.refresh(db_item)
 
-        worker.poll()
-        print('PRED DONE POLL')
+        task.status = STATUS_DONE
+
+    worker.poll()
+    print('PRED DONE POLL')
 
 
 tasks = [
@@ -148,7 +149,6 @@ async def get_status(db):
     }
     return status
 
-
 app = FastAPI()
 app.add_middleware(
     CORSMiddleware,
@@ -160,12 +160,11 @@ app.add_middleware(
 
 @app.on_event('startup')
 async def on_startup():
-    os.makedirs(config.UPLOAD_DIR, exist_ok=True)
-    os.makedirs(config.CAM_DIR, exist_ok=True)
     init_db()
 
+os.makedirs(config.UPLOAD_DIR, exist_ok=True)
+os.makedirs(config.CAM_DIR, exist_ok=True)
 app.mount('/uploads', StaticFiles(directory=config.UPLOAD_DIR), name='uploads')
-
 
 async def send_status(worker, db):
     while True:
@@ -213,13 +212,15 @@ async def predict(
 
     task = Task(
         timestamp=timestamp,
-        tag=hash[:8],
+        hash=hash[:8],
         image=filename,
         mode='bt',
         status=STATUS_PENDING,
     )
     tasks.append(task)
-    worker.add_task(task, worker, db, bt_service)
+    print('add')
+    worker.add_task(process_task, task, worker, db, bt_service)
+    print('add end')
     worker.poll()
 
     return JSONResponse(content={

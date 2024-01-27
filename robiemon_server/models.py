@@ -19,6 +19,7 @@ class BTResultDB(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     timestamp = Column(Integer, index=True, nullable=False)
+    # hash = Column(String, nullable=False)
     original_image = Column(String, nullable=False)
     cam_image = Column(String, nullable=False)
 
