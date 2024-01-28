@@ -121,7 +121,7 @@ class ClsPredictor(BasePredictor):
 
 
 class BTPredictor(ClsPredictor):
-    def inner(self, image_path) -> np.ndarray:
+    def inner(self, image_path, with_cam) -> np.ndarray:
         print('start pred', image_path)
 
         model = self.get_model()
@@ -148,21 +148,24 @@ class BTPredictor(ClsPredictor):
             torch.cuda.empty_cache()
             raise e
 
-        try:
-            pred_id = np.argmax(o)
-            targets = [ClassifierOutputTarget(pred_id)]
-            mask = gradcam(input_tensor=t, targets=targets)[0]
-            cam_image = Image.fromarray((mask * 255).astype(np.uint8))
-        except torch.cuda.OutOfMemoryError as e:
+        if with_cam:
+            try:
+                pred_id = np.argmax(o)
+                targets = [ClassifierOutputTarget(pred_id)]
+                mask = gradcam(input_tensor=t, targets=targets)[0]
+                cam_image = Image.fromarray((mask * 255).astype(np.uint8))
+            except torch.cuda.OutOfMemoryError as e:
+                cam_image = None
+            finally:
+                del t
+                del model
+                del gradcam
+                gc.collect()
+                if using_gpu:
+                    torch._C._cuda_clearCublasWorkspaces()
+                    torch.cuda.empty_cache()
+        else:
             cam_image = None
-        finally:
-            del t
-            del model
-            del gradcam
-            gc.collect()
-            if using_gpu:
-                torch._C._cuda_clearCublasWorkspaces()
-                torch.cuda.empty_cache()
 
         print('done pred', image_path)
         return o, features, cam_image

@@ -10,7 +10,7 @@ import hashlib
 from datetime import datetime
 
 import uvicorn
-from fastapi import FastAPI, HTTPException, Depends, Request, Header, File, UploadFile, Response
+from fastapi import FastAPI, HTTPException, Depends, Request, Header, File, UploadFile, Response, Form
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import StreamingResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -42,8 +42,10 @@ class Task(BaseModel):
     timestamp: int
     hash: str
     image: str
-    mode: str = Field(..., regex=r'^bt$')
     status: str = Field(..., regex=r'^pending|processing|done$')
+
+    mode: str = Field(..., regex=r'^bt$')
+    with_cam: bool
 
 
 async def process_task(task, worker, db, bt_service):
@@ -57,9 +59,11 @@ async def process_task(task, worker, db, bt_service):
     ok = False
     try:
         result, features, cam_image = await bt_service.predict(
-            # 'data/ml/weights/bt_efficientnet_b0_f5.pt',
-            'data/weights/bt_resnetrs50_f0.pt',
+            'data/weights/bt_efficientnet_b0_f5.pt',
+            # 'data/weights/bt_resnetrs50_f0.pt',
             os.path.join(config.UPLOAD_DIR, task.image),
+            with_cam=task.with_cam,
+            # with_cam=True,
         )
         if cam_image:
             cam_image_name = f'{task.timestamp}.png'
@@ -67,7 +71,7 @@ async def process_task(task, worker, db, bt_service):
             cam_image.save(os.path.join(config.CAM_DIR, cam_image_name))
         else:
             print('NO CAM')
-            cam_image_name = None
+            cam_image_name = ''
         ok = True
     except torch.cuda.OutOfMemoryError as e:
         print(e)
@@ -153,7 +157,11 @@ app = FastAPI()
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,
-    allow_origins=['*'],
+    allow_origins=[
+        'http://localhost',
+        'http://localhost:5173',
+        '*',
+    ],
     allow_methods=['*'],
     allow_headers=['*'],
 )
@@ -165,6 +173,7 @@ async def on_startup():
 os.makedirs(config.UPLOAD_DIR, exist_ok=True)
 os.makedirs(config.CAM_DIR, exist_ok=True)
 app.mount('/uploads', StaticFiles(directory=config.UPLOAD_DIR), name='uploads')
+app.mount('/cams', StaticFiles(directory=config.CAM_DIR), name='cams')
 
 async def send_status(worker, db):
     while True:
@@ -196,6 +205,7 @@ async def status(response: Response, db: Session = Depends(get_db)):
 
 @app.post('/predict')
 async def predict(
+    cam: bool = Form(),
     file: UploadFile = File(...),
     worker:Worker = Depends(),
     bt_service: BTService = Depends(),
@@ -214,8 +224,9 @@ async def predict(
         timestamp=timestamp,
         hash=hash[:8],
         image=filename,
-        mode='bt',
         status=STATUS_PENDING,
+        mode='bt',
+        with_cam=cam,
     )
     tasks.append(task)
     print('add')

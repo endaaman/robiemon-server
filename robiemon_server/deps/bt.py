@@ -8,7 +8,7 @@ class BTService():
     def __init__(self):
         pass
 
-    async def predict(self, checkpoint_path, image_path) -> np.ndarray:
+    async def predict(self, checkpoint_path, image_path, with_cam) -> np.ndarray:
         predictor = get_predictor(checkpoint_path)
-        result = await predictor(image_path)
+        result = await predictor(image_path, with_cam)
         return result
