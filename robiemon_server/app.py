@@ -38,17 +38,20 @@ STATUS_TOO_LARGE = 'too_large'
 STATUS_ERROR = 'error'
 
 
-class Task(BaseModel):
+class BaseTask(BaseModel):
     timestamp: int
     hash: str
     image: str
     status: str = Field(..., regex=r'^pending|processing|done$')
-
     mode: str = Field(..., regex=r'^bt$')
-    with_cam: bool
 
 
-async def process_task(task, worker, db, bt_service):
+class BTTask(BaseTask):
+    cam: bool
+    weight: str
+
+
+async def process_bt_task(task:BTTask, worker, db, bt_service):
     if task.status != STATUS_PENDING:
         print(f'Task {task.timestamp} is not pending')
         return
@@ -59,10 +62,10 @@ async def process_task(task, worker, db, bt_service):
     ok = False
     try:
         result, features, cam_image = await bt_service.predict(
-            'data/weights/bt_efficientnet_b0_f5.pt',
+            f'data/weights/{task.weight}',
             # 'data/weights/bt_resnetrs50_f0.pt',
             os.path.join(config.UPLOAD_DIR, task.image),
-            with_cam=task.with_cam,
+            with_cam=task.cam,
             # with_cam=True,
         )
         if cam_image:
@@ -203,41 +206,6 @@ async def status(response: Response, db: Session = Depends(get_db)):
     return JSONResponse(content=status)
 
 
-@app.post('/predict')
-async def predict(
-    cam: bool = Form(),
-    file: UploadFile = File(...),
-    worker:Worker = Depends(),
-    bt_service: BTService = Depends(),
-    db:Session = Depends(get_db),
-):
-    # timestamp = int(datetime.now().timestamp())
-    timestamp = int(time.time())
-    filename = f'{timestamp}.png'
-    with open(os.path.join(config.UPLOAD_DIR, filename), 'wb') as buffer:
-        shutil.copyfileobj(file.file, buffer)
-
-    base = str(timestamp).encode('utf-8')
-    hash = hashlib.sha256(base).hexdigest()
-
-    task = Task(
-        timestamp=timestamp,
-        hash=hash[:8],
-        image=filename,
-        status=STATUS_PENDING,
-        mode='bt',
-        with_cam=cam,
-    )
-    tasks.append(task)
-    print('add')
-    worker.add_task(process_task, task, worker, db, bt_service)
-    print('add end')
-    worker.poll()
-
-    return JSONResponse(content={
-        **task.dict()
-    })
-
 
 @app.get('/results/bt')
 async def read_result(db:Session = Depends(get_db)):
@@ -293,3 +261,57 @@ def read_item(item_id: int, db: Session = Depends(get_db)):
 def read_items(db: Session = Depends(get_db)):
     db_items = db.query(ItemDB).all()
     return db_items
+
+
+
+@app.post('/predict/bt')
+async def predict(
+    cam: bool = Form(),
+    weight: str = Form(),
+    file: UploadFile = File(...),
+    worker:Worker = Depends(),
+    bt_service: BTService = Depends(),
+    db:Session = Depends(get_db),
+):
+    # timestamp = int(datetime.now().timestamp())
+    timestamp = int(time.time())
+    filename = f'{timestamp}.png'
+    with open(os.path.join(config.UPLOAD_DIR, filename), 'wb') as buffer:
+        shutil.copyfileobj(file.file, buffer)
+
+    base = str(timestamp).encode('utf-8')
+    hash = hashlib.sha256(base).hexdigest()
+
+    task = BTTask(
+        timestamp=timestamp,
+        hash=hash[:8],
+        image=filename,
+        status=STATUS_PENDING,
+        mode='bt',
+
+        cam=cam,
+        weight=weight,
+    )
+    tasks.append(task)
+    print('add')
+    worker.add_task(process_bt_task, task, worker, db, bt_service)
+    print('add end')
+    worker.poll()
+
+    return JSONResponse(content={
+        **task.dict()
+    })
+
+
+
+@app.post('/predict/eosino')
+async def predict(
+    file: UploadFile = File(...),
+    worker:Worker = Depends(),
+    bt_service: BTService = Depends(),
+    db:Session = Depends(get_db),
+):
+    return JSONResponse(content={
+        'message': 'WIP'
+    })
+
