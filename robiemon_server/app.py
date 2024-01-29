@@ -63,7 +63,6 @@ async def process_bt_task(task:BTTask, worker, db, bt_service):
     try:
         result, features, cam_image = await bt_service.predict(
             f'data/weights/{task.weight}',
-            # 'data/weights/bt_resnetrs50_f0.pt',
             os.path.join(config.UPLOAD_DIR, task.image),
             with_cam=task.cam,
             # with_cam=True,
@@ -178,6 +177,23 @@ os.makedirs(config.CAM_DIR, exist_ok=True)
 app.mount('/uploads', StaticFiles(directory=config.UPLOAD_DIR), name='uploads')
 app.mount('/cams', StaticFiles(directory=config.CAM_DIR), name='cams')
 
+@app.get('/weights')
+def read_items():
+    w = [
+        {
+            'label': 'ResNet-RS 50',
+            'weight': 'bt_resnetrs50_f0.pt',
+        },
+        {
+            'label': 'EfficientNet B0',
+            'weight': 'bt_efficientnet_b0_f5.pt',
+        }
+    ]
+    return JSONResponse(content=w)
+
+
+
+
 async def send_status(worker, db):
     while True:
         status = await get_status(db)
@@ -206,7 +222,6 @@ async def status(response: Response, db: Session = Depends(get_db)):
     return JSONResponse(content=status)
 
 
-
 @app.get('/results/bt')
 async def read_result(db:Session = Depends(get_db)):
     return db.query(BTResultDB).all()
@@ -227,40 +242,6 @@ async def read_results(
     return JSONResponse(content={
         'message': 'Record deleted'
     })
-
-
-class RequestItemCreate(BaseModel):
-    name: str
-    desc: str
-
-class ResponseItem(BaseModel):
-    id: int
-    name: str
-    desc: str
-
-    class Config:
-        orm_mode = True
-
-
-@app.post('/items', response_model=ResponseItem)
-def create_item(item: RequestItemCreate, db: Session = Depends(get_db)):
-    db_item = ItemDB(**item.dict())
-    db.add(db_item)
-    db.commit()
-    db.refresh(db_item)
-    return db_item
-
-@app.get('/items/{item_id}', response_model=ResponseItem)
-def read_item(item_id: int, db: Session = Depends(get_db)):
-    db_item = db.query(ItemDB).filter(ItemDB.id == item_id).first()
-    if db_item is None:
-        raise HTTPException(status_code=404, detail="Item not found")
-    return db_item
-
-@app.get('/items', response_model=list[ResponseItem])
-def read_items(db: Session = Depends(get_db)):
-    db_items = db.query(ItemDB).all()
-    return db_items
 
 
 
