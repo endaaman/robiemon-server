@@ -29,12 +29,6 @@ class BTResultDB(Base):
     B = Column(Float)
 
 
-class ItemDB(Base):
-    __tablename__ = 'items'
-    id = Column(Integer, primary_key=True, index=True)
-    name = Column(String)
-    desc = Column(String)
-
 class TaskDB(Base):
     __tablename__ = 'tasks'
     id = Column(Integer, primary_key=True, index=True)

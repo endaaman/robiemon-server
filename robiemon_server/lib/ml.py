@@ -5,7 +5,6 @@ import asyncio
 from functools import lru_cache
 from typing import NamedTuple
 
-from aioprocessing import AioEvent, AioProcess
 from PIL import Image
 from PIL.Image import Image as ImageType
 import cv2
