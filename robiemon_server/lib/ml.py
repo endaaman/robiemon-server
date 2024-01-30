@@ -36,17 +36,6 @@ def get_cam_layers(m, name=None):
     raise RuntimeError('CAM layers are not determined.')
     return []
 
-class Checkpoint(NamedTuple):
-    config: dict
-    epoch: int
-    model_state: dict
-    optimizer_state: dict
-    scheduler_state: dict
-    train_history: dict
-    val_history: dict
-    random_states: dict
-
-
 class TimmModel(nn.Module):
     def __init__(self, name, num_classes, pretrained=True):
         super().__init__()
@@ -98,10 +87,10 @@ class ClsPredictor(BasePredictor):
     def __init__(self, checkpoint_path):
         self.result = None
         self.checkpoint_path = checkpoint_path
-        self.checkpoint: Checkpoint = torch.load(checkpoint_path, map_location=device)
+        self.checkpoint = torch.load(checkpoint_path, map_location=device)
 
-        mean = self.checkpoint.config.get('mean', 0.7)
-        std = self.checkpoint.config.get('std', 0.2)
+        mean = self.checkpoint['config'].get('mean', 0.7)
+        std = self.checkpoint['config'].get('std', 0.2)
 
         self.transform = transforms.Compose([
             transforms.ToTensor(),
@@ -110,10 +99,10 @@ class ClsPredictor(BasePredictor):
 
     def get_model(self):
         model = TimmModel(
-            name=self.checkpoint.config['model_name'],
-            num_classes=self.checkpoint.config['num_classes']
+            name=self.checkpoint['config']['model_name'],
+            num_classes=self.checkpoint['config']['num_classes']
         )
-        model.load_state_dict(self.checkpoint.model_state)
+        model.load_state_dict(self.checkpoint['model_state'])
         model = model.eval().to(device)
         return model
 
@@ -128,7 +117,6 @@ class BTPredictor(ClsPredictor):
         gradcam = CAM.GradCAM(
             model=model,
             target_layers=model.get_cam_layers(),
-            use_cuda=using_gpu
         )
 
         image = Image.open(image_path).convert('RGB')
