@@ -3,7 +3,7 @@ from pydantic import BaseModel, Field
 
 class BaseTask(BaseModel):
     timestamp: int
-    hash: str
+    name: str
     image: str
     status: str = Field(..., regex=r'^pending|processing|done$')
     mode: str = Field(..., regex=r'^bt$')
@@ -17,6 +17,7 @@ class BTTask(BaseTask):
 class BTResult(BaseModel):
     id: int
     timestamp: int
+    name: str
     original_image: str
     cam_image: str
     L: float

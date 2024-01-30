@@ -42,7 +42,9 @@ async def process_bt_task(task:BTTask, worker, db, bt_service):
     if task.status != STATUS_PENDING:
         print(f'Task {task.timestamp} is not pending')
         return
-    print('start', task.timestamp)
+    print('Task accepted')
+    print(task)
+
     task.status = STATUS_PROCESSING
     worker.poll()
 
@@ -57,7 +59,7 @@ async def process_bt_task(task:BTTask, worker, db, bt_service):
         )
         if cam_image:
             cam_image_name = f'{task.timestamp}.png'
-            print('save cam', os.path.join(config.CAM_DIR, cam_image_name))
+            print('CAM SAVED')
             cam_image.save(os.path.join(config.CAM_DIR, cam_image_name))
         else:
             print('NO CAM')
@@ -76,8 +78,10 @@ async def process_bt_task(task:BTTask, worker, db, bt_service):
     if ok:
         db_item = BTResultDB(
             timestamp=task.timestamp,
+            name=task.name,
             original_image=task.image,
             cam_image=cam_image_name,
+            weight=task.weight,
             L=result[0],
             M=result[1],
             G=result[2],
@@ -90,10 +94,17 @@ async def process_bt_task(task:BTTask, worker, db, bt_service):
         task.status = STATUS_DONE
 
     worker.poll()
-    print('PRED DONE POLL')
+    print('PRED DONE', task.timestamp)
 
 
 tasks = []
+models = [{
+    'label': 'ResNet RS50',
+    'value': 'bt_resnetrs50_f0.pt',
+}, {
+    'label': 'EfficientNet B0',
+    'value': 'bt_efficientnet_b0_f0.pt',
+}]
 
 async def get_status(db):
     bt_results = [
@@ -104,6 +115,7 @@ async def get_status(db):
     status = {
         'tasks': [t.dict() for t in tasks],
         'bt_results': [r.dict() for r in  bt_results],
+        'models': models,
     }
     return status
 
@@ -135,9 +147,9 @@ async def send_status(state, worker, db):
         yield f'data: {status_str}\n\n'
         await asyncio.sleep(1)
         await worker.wait()
-        print('loop')
         if state.quitted:
             print('QUIT!')
+            break
 
 
 @router.get('/status_sse')
@@ -206,7 +218,7 @@ async def predict(
 
     task = BTTask(
         timestamp=timestamp,
-        hash=hash[:8],
+        name=hash[:8],
         image=filename,
         status=STATUS_PENDING,
         mode='bt',
@@ -215,9 +227,7 @@ async def predict(
         weight=weight,
     )
     tasks.append(task)
-    print('add')
     worker.add_task(process_bt_task, task, worker, db, bt_service)
-    print('add end')
     worker.poll()
 
     return JSONResponse(content={
