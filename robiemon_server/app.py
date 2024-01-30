@@ -1,7 +1,9 @@
 import os
+import sys
 import re
 import logging
 import asyncio
+import signal
 
 import uvicorn
 from fastapi import FastAPI, APIRouter, Depends
@@ -9,6 +11,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 
 from .lib.db import init_db
+from .lib.worker import wait, unlock
 from .lib.config import config
 from .api import router as api_router
 
@@ -25,9 +28,29 @@ app.add_middleware(
     allow_headers=['*'],
 )
 
+app.state.quitted = False
+
+
+
+async def async_receive_signal():
+    app.state.quitted = True
+    sys.exit()
+    unlock()
+
+def receive_signal(signal_number, frame):
+    asyncio.create_task(async_receive_signal)
+
 @app.on_event('startup')
 async def on_startup():
+    loop = asyncio.get_event_loop()
+    signal.signal(signal.SIGINT, receive_signal)
     init_db()
+
+@app.on_event('shutdown')
+def shutdown_event():
+    app.state.quitted = True
+    unlock()
+
 
 os.makedirs(config.UPLOAD_DIR, exist_ok=True)
 os.makedirs(config.CAM_DIR, exist_ok=True)
