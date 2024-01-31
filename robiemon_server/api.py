@@ -1,4 +1,5 @@
 import os
+import io
 import re
 import json
 import threading
@@ -20,6 +21,7 @@ from sqlalchemy.orm import Session
 import numpy as np
 import torch
 
+from PIL import Image
 from .lib.config import config
 from .deps.bt import BTService
 from .deps.db import get_db
@@ -230,14 +232,14 @@ async def predict(
     timestamp = int(time.time())
 
     img = Image.open(io.BytesIO(await file.read()))
-    img = img.resize((img.width*scale, img.height * scale))
+    img = img.resize((int(img.width*scale), int(img.height * scale)), Image.Resampling.LANCZOS)
 
-    image_path = os.path.join(config.UPLOAD_DIR, filename)
+    file_name = f'{timestamp}.png'
+    image_path = os.path.join(config.UPLOAD_DIR, file_name)
     img.save(image_path)
 
     # # timestamp = int(datetime.now().timestamp())
-    # filename = f'{timestamp}.png'
-    # with open(os.path.join(config.UPLOAD_DIR, filename), 'wb') as buffer:
+    # with open(os.path.join(config.UPLOAD_DIR, file_name), 'wb') as buffer:
     #     shutil.copyfileobj(file.file, buffer)
 
     base = str(timestamp).encode('utf-8')
@@ -246,7 +248,7 @@ async def predict(
     task = BTTask(
         timestamp=timestamp,
         name=hash[:8],
-        image=filename,
+        image=file_name,
         status=STATUS_PENDING,
         mode='bt',
 

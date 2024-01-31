@@ -16,6 +16,7 @@ grad-cam = "^1.5.0"
 numpy = "^1.26.3"
 python-multipart = "^0.0.6"
 uvicorn = {extras = ["standard"], version = "^0.27.0.post1"}
+pillow = "^10.2.0"
 
 [tool.poetry.dev-dependencies]
 
