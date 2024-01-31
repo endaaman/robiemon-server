@@ -219,18 +219,26 @@ async def read_results(
 
 @router.post('/predict/bt')
 async def predict(
+    file: UploadFile = File(...),
+    scale: float = Form(),
     cam: bool = Form(),
     weight: str = Form(),
-    file: UploadFile = File(...),
     worker:Worker = Depends(),
     bt_service: BTService = Depends(),
     db:Session = Depends(get_db),
 ):
-    # timestamp = int(datetime.now().timestamp())
     timestamp = int(time.time())
-    filename = f'{timestamp}.png'
-    with open(os.path.join(config.UPLOAD_DIR, filename), 'wb') as buffer:
-        shutil.copyfileobj(file.file, buffer)
+
+    img = Image.open(io.BytesIO(await file.read()))
+    img = img.resize((img.width*scale, img.height * scale))
+
+    image_path = os.path.join(config.UPLOAD_DIR, filename)
+    img.save(image_path)
+
+    # # timestamp = int(datetime.now().timestamp())
+    # filename = f'{timestamp}.png'
+    # with open(os.path.join(config.UPLOAD_DIR, filename), 'wb') as buffer:
+    #     shutil.copyfileobj(file.file, buffer)
 
     base = str(timestamp).encode('utf-8')
     hash = hashlib.sha256(base).hexdigest()
