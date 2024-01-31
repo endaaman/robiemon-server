@@ -100,10 +100,10 @@ async def process_bt_task(task:BTTask, worker, db, bt_service):
 tasks = []
 models = [{
     'label': 'ResNet RS50',
-    'value': 'bt_resnetrs50_f0.pt',
+    'weight': 'bt_resnetrs50_f0.pt',
 }, {
     'label': 'EfficientNet B0',
-    'value': 'bt_efficientnet_b0_f0.pt',
+    'weight': 'bt_efficientnet_b0_f0.pt',
 }]
 
 async def get_status(db):
@@ -117,6 +117,7 @@ async def get_status(db):
         'bt_results': [r.dict() for r in  bt_results],
         'models': models,
     }
+
     return status
 
 
@@ -147,9 +148,6 @@ async def send_status(state, worker, db):
         yield f'data: {status_str}\n\n'
         await asyncio.sleep(1)
         await worker.wait()
-        if state.quitted:
-            print('QUIT!')
-            break
 
 
 @router.get('/status_sse')
@@ -173,6 +171,27 @@ async def status(response: Response, db: Session = Depends(get_db)):
     status = await get_status(db)
     return JSONResponse(content=status)
 
+@router.delete('/tasks/{timestamp}')
+async def read_results(
+    timestamp: int,
+    worker: Worker = Depends(),
+    db:Session = Depends(get_db)
+):
+    needle = -1
+    for i, t in enumerate(tasks):
+        if t.timestamp == timestamp:
+            needle = i
+    if needle < 0:
+        return JSONResponse(content={
+            'message': 'No Task found'
+        }, status_code=404)
+
+
+    del tasks[needle]
+    worker.poll()
+    return JSONResponse(content={
+        'message': 'Task deleted'
+    })
 
 @router.get('/results/bt')
 async def read_result(db:Session = Depends(get_db)):

@@ -20,6 +20,7 @@ class BTResult(BaseModel):
     name: str
     original_image: str
     cam_image: str
+    weight: str
     L: float
     M: float
     G: float
