@@ -113,8 +113,8 @@ class BTPredictor(ClsPredictor):
         print('start pred', image_path)
 
         model = self.get_model()
-
-        gradcam = CAM.GradCAM(
+        gradcam = CAM.GradCAMPlusPlus(
+        # gradcam = CAM.GradCAM(
             model=model,
             target_layers=model.get_cam_layers(),
         )
