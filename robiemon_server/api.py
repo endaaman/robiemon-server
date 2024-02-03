@@ -101,6 +101,9 @@ async def process_bt_task(task:BTTask, worker, db, bt_service):
 
 tasks = []
 models = [{
+    'label': 'ResNet RS50(all)',
+    'weight': 'bt_resnetrs50_all.pt',
+}, {
     'label': 'ResNet RS50(fold0)',
     'weight': 'bt_resnetrs50_f0.pt',
 }, {
