@@ -107,6 +107,9 @@ models = [{
     'label': 'ResNet RS50(fold0)',
     'weight': 'bt_resnetrs50_f0.pt',
 }, {
+    'label': 'CAFormer S18',
+    'weight': 'bt_caformer_s18_all.pt',
+}, {
     'label': 'EfficientNetV2 B0(all)',
     'weight': 'bt_efficientnetv2_b0_all.pt',
 }, {

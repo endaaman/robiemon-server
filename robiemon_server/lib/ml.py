@@ -30,9 +30,11 @@ def get_cam_layers(m, name=None):
     if re.match(r'.*efficientnet.*', name):
         return [m.conv_head]
     if re.match(r'^resnetrs.*', name):
-        return [m.layer4[-1].act3]
+        return [m.layer4[-1]]
     if re.match(r'^resnet\d+', name):
         return [m.layer4[-1].act2]
+    # if re.match(r'^caformer_.*', name):
+    #     return m.stages[-1].blocks
     raise RuntimeError('CAM layers are not determined.')
     return []
 
@@ -113,23 +115,19 @@ class BTPredictor(ClsPredictor):
         print('start pred', image_path)
 
         model = self.get_model()
-        gradcam = CAM.GradCAMPlusPlus(
-        # gradcam = CAM.GradCAM(
-            model=model,
-            target_layers=model.get_cam_layers(),
-        )
 
         image = Image.open(image_path).convert('RGB')
         t = self.transform(image)[None, ...].to(device)
         try:
             with torch.no_grad():
-                oo, features = model(t, activate=True, with_feautres=True)
+                # TODO: imple with_feautres
+                oo = model(t, activate=True)
+            features = None
+            # features = features.detach().cpu().numpy()[0]
             o = oo.detach().cpu().numpy()[0]
-            features = features.detach().cpu().numpy()[0]
         except torch.cuda.OutOfMemoryError as e:
             del t
             del model
-            del gradcam
             torch._C._cuda_clearCublasWorkspaces()
             gc.collect()
             torch.cuda.empty_cache()
@@ -137,6 +135,11 @@ class BTPredictor(ClsPredictor):
 
         if with_cam:
             try:
+                gradcam = CAM.GradCAMPlusPlus(
+                # gradcam = CAM.GradCAM(
+                    model=model,
+                    target_layers=model.get_cam_layers(),
+                )
                 pred_id = np.argmax(o)
                 targets = [ClassifierOutputTarget(pred_id)]
                 mask = gradcam(input_tensor=t, targets=targets)[0]
