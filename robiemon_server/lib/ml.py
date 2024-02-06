@@ -31,12 +31,63 @@ def get_cam_layers(m, name=None):
         return [m.conv_head]
     if re.match(r'^resnetrs.*', name):
         return [m.layer4[-1]]
+    if re.match(r'^resnetv2.*', name):
+        return [m.stages[-1].blocks[-1]]
     if re.match(r'^resnet\d+', name):
         return [m.layer4[-1].act2]
-    # if re.match(r'^caformer_.*', name):
-    #     return m.stages[-1].blocks
+    if re.match(r'^caformer_.*', name):
+        return [m.stages[-1].blocks[-1].res_scale2]
+    if re.match(r'^convnext.*', name):
+        # return [m.stages[-1].blocks[-1].conv_dw]
+        return [m.stages[-1].blocks[-1].norm]
+    if name == 'swin_base_patch4_window7_224':
+        return [m.layers[-1].blocks[-1].norm1]
     raise RuntimeError('CAM layers are not determined.')
     return []
+
+def find_closest_pair(x, r):
+    closest_diff = float('inf')
+    closest_a = None
+    closest_b = None
+    for a in range(1, x + 1):
+        if x % a != 0:
+            continue
+        b = x // a
+        current_r = a / b
+        diff = abs(current_r - r)
+        if diff < closest_diff:
+            closest_diff = diff
+            closest_a = a
+            closest_b = b
+    return closest_a, closest_b
+
+
+def get_reshaper(name, width, height):
+    def reshape_transform(tensor):
+        w, h = find_closest_pair(tensor.numel()//512, width/height)
+        result = tensor.reshape(
+            tensor.size(0),
+            h,
+            w,
+            tensor.size(-1)
+        )
+        # ABCD -> ABDC -> ADBC
+        result = result.transpose(2, 3).transpose(1, 2)
+        # print(tensor[:, 1 :  , :].shape)
+        # result = tensor[:, 1 :  , :].reshape(tensor.size(0), height, width, tensor.size(-1))
+        # result = result.transpose(2, 3).transpose(1, 2)
+        return result
+
+    if re.match(r'^caformer_.*', name):
+        return reshape_transform
+
+    if re.match(r'^convnext_.*', name):
+        return reshape_transform
+
+    if name == 'swin_base_patch4_window7_224':
+        return reshape_transform
+
+    return None
 
 class TimmModel(nn.Module):
     def __init__(self, name, num_classes, pretrained=True):
@@ -59,7 +110,11 @@ class TimmModel(nn.Module):
                 x = torch.sigmoid(x)
 
         if with_feautres:
-            features = self.base.global_pool(features)
+            if hasattr(self.base, 'global_pool'):
+                pool = self.base.global_pool
+            else:
+                pool = self.base.head.global_pool
+            features = pool(features)
             return x, features
         return x
 
@@ -135,21 +190,23 @@ class BTPredictor(ClsPredictor):
 
         if with_cam:
             try:
+                print(image.width, image.height)
                 gradcam = CAM.GradCAMPlusPlus(
                 # gradcam = CAM.GradCAM(
                     model=model,
-                    target_layers=model.get_cam_layers(),
+                    target_layers=get_cam_layers(model.base, model.name),
+                    reshape_transform=get_reshaper(model.name, image.width, image.height)
                 )
                 pred_id = np.argmax(o)
                 targets = [ClassifierOutputTarget(pred_id)]
                 mask = gradcam(input_tensor=t, targets=targets)[0]
                 cam_image = Image.fromarray((mask * 255).astype(np.uint8))
+                del gradcam
             except torch.cuda.OutOfMemoryError as e:
                 cam_image = None
             finally:
                 del t
                 del model
-                del gradcam
                 gc.collect()
                 if using_gpu:
                     torch._C._cuda_clearCublasWorkspaces()
