@@ -21,6 +21,7 @@ class BTResult(BaseModel):
     original_image: str
     cam_image: str
     weight: str
+    memo: str
     L: float
     M: float
     G: float

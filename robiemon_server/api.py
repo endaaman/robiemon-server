@@ -84,6 +84,7 @@ async def process_bt_task(task:BTTask, worker, db, bt_service):
             original_image=task.image,
             cam_image=cam_image_name,
             weight=task.weight,
+            memo='',
             L=result[0],
             M=result[1],
             G=result[2],
@@ -206,6 +207,7 @@ async def read_results(
         'message': 'Task deleted'
     })
 
+
 @router.get('/results/bt')
 async def read_result(db:Session = Depends(get_db)):
     return db.query(BTResultDB).all()
@@ -226,6 +228,34 @@ async def read_results(
     worker.poll()
     return JSONResponse(content={
         'message': 'Record deleted'
+    })
+
+
+
+class PatchResult(BaseModel):
+    name: str | None = None
+    memo: str | None = None
+
+@router.patch('/results/bt/{id}')
+async def patch_results(
+    id: int,
+    q: PatchResult,
+    worker:Worker = Depends(),
+    db:Session = Depends(get_db)
+):
+    db_item = db.query(BTResultDB).filter(BTResultDB.id == id).first()
+    print('query', q)
+    if q.name is not None:
+        db_item.name = q.name
+        print('update name', q.name)
+    if q.memo is not None:
+        db_item.memo = q.memo
+        print('update memo', q.memo)
+    db.commit()
+    worker.poll()
+
+    return JSONResponse(content={
+        'message': 'Task updated'
     })
 
 

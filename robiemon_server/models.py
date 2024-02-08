@@ -1,6 +1,6 @@
 import datetime
 from pydantic import BaseModel, Field, validator
-from sqlalchemy import Boolean, Column, Integer, Float, String, ForeignKey
+from sqlalchemy import Boolean, Column, Integer, Float, String, ForeignKey, Text
 
 from .lib.db import Base
 
@@ -19,10 +19,11 @@ class BTResultDB(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     timestamp = Column(Integer, index=True, nullable=False)
-    name = Column(String, nullable=False)
-    original_image = Column(String, nullable=False)
-    cam_image = Column(String, nullable=False)
-    weight = Column(String, nullable=False)
+    name = Column(Text, nullable=False)
+    original_image = Column(Text, nullable=False)
+    cam_image = Column(Text, nullable=False)
+    weight = Column(Text, nullable=False)
+    memo = Column(Text, nullable=False)
 
     L = Column(Float)
     M = Column(Float)
@@ -33,5 +34,5 @@ class BTResultDB(Base):
 class TaskDB(Base):
     __tablename__ = 'tasks'
     id = Column(Integer, primary_key=True, index=True)
-    status = Column(String)
-    image = Column(String)
+    status = Column(Text)
+    image = Column(Text)
