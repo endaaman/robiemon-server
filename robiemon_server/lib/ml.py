@@ -18,6 +18,8 @@ from torchvision import transforms, models
 import pytorch_grad_cam as CAM
 from pytorch_grad_cam.utils.model_targets import ClassifierOutputTarget
 
+from .config import config
+
 Image.MAX_IMAGE_PIXELS = None
 
 

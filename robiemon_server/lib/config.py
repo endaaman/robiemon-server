@@ -14,6 +14,8 @@ class Config(BaseSettings):
     UPLOAD_DIR: str = 'data/static/uploads'
     CAM_DIR: str = 'data/static/cams'
 
+    WEIGHT_DIR: str = 'data'
+
     class Config:
         env_file = '.env'
         frozen = True

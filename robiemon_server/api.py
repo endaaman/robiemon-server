@@ -53,7 +53,7 @@ async def process_bt_task(task:BTTask, worker, db, bt_service):
     ok = False
     try:
         result, features, cam_image = await bt_service.predict(
-            f'data/weights/{task.weight}',
+            f'data/weights/bt/{task.weight}',
             # 'data/weights/bt_resnetrs50_f0.pt',
             os.path.join(config.UPLOAD_DIR, task.image),
             with_cam=task.cam,
@@ -100,26 +100,22 @@ async def process_bt_task(task:BTTask, worker, db, bt_service):
 
 
 tasks = []
-models = [
+bt_weights = [
     {
-        'label': 'CAFormer S18',
-        'weight': 'bt_caformer_s18_all.pt',
+        'label': 'ConvNeXt V2 Nano',
+        'weight': 'convnextv2_nano_all.pt',
     },
     # {
-    #     'label': 'ResNet RS50(all)',
-    #     'weight': 'bt_resnetrs50_all.pt',
+    #     'label': 'CAFormer S18',
+    #     'weight': 'caformer_s18_all.pt',
     # },
+    {
+        'label': 'ResNet RS50',
+        'weight': 'resnetrs50_all.pt',
+    },
     {
         'label': 'ResNet RS50(fold0)',
-        'weight': 'bt_resnetrs50_f0.pt',
-    },
-    # {
-    #     'label': 'EfficientNetV2 B0(all)',
-    #     'weight': 'bt_efficientnetv2_b0_all.pt',
-    # },
-    {
-        'label': 'EfficientNet B0(fold0)',
-        'weight': 'bt_efficientnet_b0_f0.pt',
+        'weight': 'resnetrs50_f0.pt',
     },
 ]
 
@@ -132,7 +128,7 @@ async def get_status(db):
     status = {
         'tasks': [t.dict() for t in tasks],
         'bt_results': [r.dict() for r in  bt_results],
-        'models': models,
+        'bt_weights': bt_weights,
     }
 
     return status
