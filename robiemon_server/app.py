@@ -42,8 +42,6 @@ def shutdown_event():
 os.makedirs(config.UPLOAD_DIR, exist_ok=True)
 os.makedirs(config.CAM_DIR, exist_ok=True)
 app.mount('/static', StaticFiles(directory=config.STATIC_DIR), name='static')
-
-
 app.include_router(api_router)
 
 

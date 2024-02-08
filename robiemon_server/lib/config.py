@@ -13,7 +13,6 @@ class Config(BaseSettings):
     STATIC_DIR: str = 'data/static'
     UPLOAD_DIR: str = 'data/static/uploads'
     CAM_DIR: str = 'data/static/cams'
-
     WEIGHT_DIR: str = 'data'
 
     class Config:
