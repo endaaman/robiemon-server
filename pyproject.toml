@@ -17,6 +17,7 @@ numpy = "^1.26.3"
 python-multipart = "^0.0.6"
 uvicorn = {extras = ["standard"], version = "^0.27.0.post1"}
 pillow = "^10.2.0"
+sqlite-web = "^0.6.3"
 
 [tool.poetry.group.dev.dependencies]
 jedi-language-server = "^0.41.2"
@@ -26,3 +27,4 @@ jedi-language-server = "^0.41.2"
 [tool.poetry.scripts]
 dev = "robiemon_server.app:dev"
 prod = "robiemon_server.app:prod"
+admin = "sqlite_web data/server.db"
