@@ -11,6 +11,7 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 
+from .lib.ml import using_gpu
 from .lib.db import init_db
 from .lib.worker import wait, unlock
 from .lib.config import config

@@ -24,6 +24,7 @@ Image.MAX_IMAGE_PIXELS = None
 
 
 using_gpu = torch.cuda.is_available()
+print('GPU mode' if using_gpu else 'CPU mode')
 device = torch.device('cuda' if using_gpu else 'cpu')
 
 
