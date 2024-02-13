@@ -17,6 +17,7 @@ from .lib.worker import wait, unlock
 from .lib.config import config
 from .api import router as api_router
 
+
 app = FastAPI()
 app.add_middleware(
     CORSMiddleware,
@@ -50,6 +51,7 @@ def get_root():
 
 
 os.makedirs(config.UPLOAD_DIR, exist_ok=True)
+os.makedirs(config.THUMB_DIR, exist_ok=True)
 os.makedirs(config.CAM_DIR, exist_ok=True)
 app.mount('/static', StaticFiles(directory=config.STATIC_DIR), name='static')
 app.include_router(api_router)

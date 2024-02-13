@@ -38,6 +38,8 @@ STATUS_DONE = 'done'
 STATUS_TOO_LARGE = 'too_large'
 STATUS_ERROR = 'error'
 
+THUMB_SIZE = 640
+
 
 
 async def process_bt_task(task:BTTask, worker, db, bt_service):
@@ -57,17 +59,15 @@ async def process_bt_task(task:BTTask, worker, db, bt_service):
         result, features, cam_image = await bt_service.predict(
             f'data/weights/bt/{task.weight}',
             # 'data/weights/bt_resnetrs50_f0.pt',
-            os.path.join(config.UPLOAD_DIR, task.image),
+            os.path.join(config.UPLOAD_DIR, f'{task.timestamp}.png'),
             with_cam=task.cam,
             # with_cam=True,
         )
         if cam_image:
-            cam_image_name = f'{task.timestamp}.png'
-            cam_image.save(os.path.join(config.CAM_DIR, cam_image_name))
+            cam_image.save(os.path.join(config.CAM_DIR, f'{task.timestamp}.png'))
         else:
             if task.cam:
                 memo = 'Too large to generate CAM.'
-            cam_image_name = ''
         ok = True
     except torch.cuda.OutOfMemoryError as e:
         print(e)
@@ -83,8 +83,7 @@ async def process_bt_task(task:BTTask, worker, db, bt_service):
         db_item = BTResultDB(
             timestamp=task.timestamp,
             name=task.name,
-            original_image=task.image,
-            cam_image=cam_image_name,
+            cam=bool(cam_image),
             weight=task.weight,
             memo=memo,
             L=result[0],
@@ -276,12 +275,21 @@ async def predict(
         raise HTTPException(status_code=404, detail='Scale is required')
 
     timestamp = int(time.time())
-    img = Image.open(io.BytesIO(await file.read()))
-    img = img.resize((int(img.width*scale), int(img.height * scale)), Image.Resampling.LANCZOS)
+    org_img = Image.open(io.BytesIO(await file.read()))
+    img = org_img.resize((int(org_img.width*scale), int(org_img.height * scale)), Image.Resampling.LANCZOS)
 
-    file_name = f'{timestamp}.png'
-    image_path = os.path.join(config.UPLOAD_DIR, file_name)
-    img.save(image_path)
+    long = max(org_img.width, org_img.height)
+    if long > THUMB_SIZE:
+        landscape = org_img.width > org_img.height
+        short = min(org_img.width, org_img.height)
+        new_long = round(THUMB_SIZE * long / short)
+        size = (new_long, THUMB_SIZE) if landscape else (THUMB_SIZE, new_long)
+        thumb_img = org_img.resize(size, Image.Resampling.LANCZOS)
+    else:
+        thumb_img = img
+
+    img.save(os.path.join(config.UPLOAD_DIR, f'{timestamp}.png'))
+    thumb_img.convert('RGB').save(os.path.join(config.THUMB_DIR, f'{timestamp}.jpg'))
 
     # # timestamp = int(datetime.now().timestamp())
     # with open(os.path.join(config.UPLOAD_DIR, file_name), 'wb') as buffer:
@@ -293,10 +301,8 @@ async def predict(
     task = BTTask(
         timestamp=timestamp,
         name=hash[:8],
-        image=file_name,
         status=STATUS_PENDING,
         mode='bt',
-
         cam=cam,
         weight=weight,
     )
