@@ -182,6 +182,7 @@ class BTPredictor(ClsPredictor):
             features = None
             # features = features.detach().cpu().numpy()[0]
             o = oo.detach().cpu().numpy()[0]
+            del oo
         except torch.cuda.OutOfMemoryError as e:
             del t
             del model
@@ -190,6 +191,8 @@ class BTPredictor(ClsPredictor):
             torch.cuda.empty_cache()
             raise e
 
+
+        cam_image = None
         if with_cam:
             try:
                 print(image.width, image.height)
@@ -205,16 +208,14 @@ class BTPredictor(ClsPredictor):
                 cam_image = Image.fromarray((mask * 255).astype(np.uint8))
                 del gradcam
             except torch.cuda.OutOfMemoryError as e:
-                cam_image = None
-            finally:
-                del t
-                del model
-                gc.collect()
-                if using_gpu:
-                    torch._C._cuda_clearCublasWorkspaces()
-                    torch.cuda.empty_cache()
-        else:
-            cam_image = None
+                del gradcam
+
+        del t
+        del model
+        gc.collect()
+        if using_gpu:
+            torch._C._cuda_clearCublasWorkspaces()
+            torch.cuda.empty_cache()
 
         print('done pred', image_path)
         return o, features, cam_image

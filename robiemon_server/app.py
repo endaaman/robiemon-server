@@ -7,6 +7,7 @@ import signal
 
 import uvicorn
 from fastapi import FastAPI, APIRouter, Depends
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -37,6 +38,14 @@ async def on_startup():
 @app.on_event('shutdown')
 def shutdown_event():
     unlock()
+
+@app.on_event('shutdown')
+
+@app.get('/')
+def get_root():
+    return JSONResponse(content={
+        "message": "Welcome to ROBIEMON server."
+    })
 
 
 os.makedirs(config.UPLOAD_DIR, exist_ok=True)

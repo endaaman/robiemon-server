@@ -14,3 +14,9 @@ RUN pip install poetry \
 
 COPY ./pyproject.toml ./poetry.lock* ./
 RUN poetry install
+
+COPY ./robiemon_server ./robiemon_server
+
+VOLUME ["data/"]
+EXPOSE 3000
+CMD ["poetry", "run", "task", "prod"]

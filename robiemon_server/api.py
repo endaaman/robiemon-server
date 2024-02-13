@@ -50,6 +50,8 @@ async def process_bt_task(task:BTTask, worker, db, bt_service):
     task.status = STATUS_PROCESSING
     worker.poll()
 
+    memo = ''
+
     ok = False
     try:
         result, features, cam_image = await bt_service.predict(
@@ -61,10 +63,10 @@ async def process_bt_task(task:BTTask, worker, db, bt_service):
         )
         if cam_image:
             cam_image_name = f'{task.timestamp}.png'
-            print('CAM SAVED')
             cam_image.save(os.path.join(config.CAM_DIR, cam_image_name))
         else:
-            print('NO CAM')
+            if task.cam:
+                memo = 'Too large to generate CAM.'
             cam_image_name = ''
         ok = True
     except torch.cuda.OutOfMemoryError as e:
@@ -84,7 +86,7 @@ async def process_bt_task(task:BTTask, worker, db, bt_service):
             original_image=task.image,
             cam_image=cam_image_name,
             weight=task.weight,
-            memo='',
+            memo=memo,
             L=result[0],
             M=result[1],
             G=result[2],
