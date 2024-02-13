@@ -270,8 +270,10 @@ async def predict(
     bt_service: BTService = Depends(),
     db:Session = Depends(get_db),
 ):
-    timestamp = int(time.time())
+    if not scale:
+        raise HTTPException(status_code=404, detail='Scale is required')
 
+    timestamp = int(time.time())
     img = Image.open(io.BytesIO(await file.read()))
     img = img.resize((int(img.width*scale), int(img.height * scale)), Image.Resampling.LANCZOS)
 
