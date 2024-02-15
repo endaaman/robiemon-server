@@ -176,6 +176,7 @@ async def status_sse(
     response.headers['Cache-Control'] = 'no-cache'
     response.headers['Content-Type'] = 'text/event-stream'
     response.headers['Connection'] = 'keep-alive'
+    response.headers['X-Accel-Buffering'] = 'no'
     return StreamingResponse(
         send_status(state, worker, db),
         media_type='text/event-stream',
