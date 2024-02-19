@@ -13,7 +13,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from .lib.ml import using_gpu
 from .lib.db import init_db
-from .lib.worker import wait, unlock
+from .lib.worker import wait, unlock, poll
 from .lib.config import config
 from .api import router as api_router
 
@@ -31,10 +31,14 @@ app.add_middleware(
     allow_headers=['*'],
 )
 
+async def auto_refresh():
+    while True:
+        await asyncio.sleep(10)
+        poll()
+
 @app.on_event('startup')
 async def on_startup():
-    loop = asyncio.get_event_loop()
-    # signal.signal(signal.SIGINT, receive_signal)
+    asyncio.create_task(auto_refresh())
     init_db()
 
 @app.on_event('shutdown')

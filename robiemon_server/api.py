@@ -76,8 +76,6 @@ async def process_bt_task(task:BTTask, worker, db, bt_service):
         print(e)
         task.status = STATUS_ERROR
 
-    await asyncio.sleep(1)
-    worker.poll()
 
     if ok:
         db_item = BTResultDB(
@@ -97,6 +95,7 @@ async def process_bt_task(task:BTTask, worker, db, bt_service):
 
         task.status = STATUS_DONE
 
+    await asyncio.sleep(1)
     worker.poll()
     print('PRED DONE', task.timestamp)
 
@@ -275,7 +274,6 @@ async def predict(
     if not scale:
         raise HTTPException(status_code=404, detail='Scale is required')
 
-    timestamp = int(time.time())
     org_img = Image.open(io.BytesIO(await file.read()))
     img = org_img.resize((int(org_img.width*scale), int(org_img.height * scale)), Image.Resampling.LANCZOS)
 
@@ -289,12 +287,11 @@ async def predict(
     else:
         thumb_img = img
 
-    img.save(os.path.join(config.UPLOAD_DIR, f'{timestamp}.png'))
-    thumb_img.convert('RGB').save(os.path.join(config.THUMB_DIR, f'{timestamp}.jpg'))
-
-    # # timestamp = int(datetime.now().timestamp())
-    # with open(os.path.join(config.UPLOAD_DIR, file_name), 'wb') as buffer:
-    #     shutil.copyfileobj(file.file, buffer)
+    timestamp = int(time.time())
+    if len(tasks) > 0:
+        last_timestap = tasks[-1].timestamp
+        if last_timestap >= timestamp:
+            timestamp = last_timestap + 1
 
     base = str(timestamp).encode('utf-8')
     hash = hashlib.sha256(base).hexdigest()
@@ -308,6 +305,10 @@ async def predict(
         weight=weight,
     )
     tasks.append(task)
+
+    img.save(os.path.join(config.UPLOAD_DIR, f'{timestamp}.png'))
+    thumb_img.convert('RGB').save(os.path.join(config.THUMB_DIR, f'{timestamp}.jpg'))
+
     worker.add_task(process_bt_task, task, worker, db, bt_service)
     worker.poll()
 
