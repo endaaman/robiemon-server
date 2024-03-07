@@ -19,6 +19,7 @@ uvicorn = {extras = ["standard"], version = "^0.27.0.post1"}
 pillow = "^10.2.0"
 sqlite-web = "^0.6.3"
 taskipy = "^1.12.2"
+tinydb = "^4.8.0"
 
 [tool.poetry.group.dev.dependencies]
 jedi-language-server = "^0.41.2"

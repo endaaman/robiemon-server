@@ -138,14 +138,15 @@ class BasePredictor:
         # return self.result
 
         loop = asyncio.get_running_loop()
-        result = await loop.run_in_executor(
+        return await loop.run_in_executor(
             None, self.inner, *args
         )
-        return result
 
-class ClsPredictor(BasePredictor):
+
+
+
+class BTPredictor(BasePredictor):
     def __init__(self, checkpoint_path):
-        self.result = None
         self.checkpoint_path = checkpoint_path
         self.checkpoint = torch.load(checkpoint_path, map_location=device)
 
@@ -166,14 +167,10 @@ class ClsPredictor(BasePredictor):
         model = model.eval().to(device)
         return model
 
-
-
-class BTPredictor(ClsPredictor):
-    def inner(self, image_path, with_cam) -> np.ndarray:
+    def __call__(self, image_path, with_cam) -> np.ndarray:
         print('start pred', image_path)
 
         model = self.get_model()
-
         image = Image.open(image_path).convert('RGB')
         t = self.transform(image)[None, ...].to(device)
         try:
@@ -197,8 +194,8 @@ class BTPredictor(ClsPredictor):
         if with_cam:
             try:
                 print(image.width, image.height)
-                gradcam = CAM.GradCAMPlusPlus(
                 # gradcam = CAM.GradCAM(
+                gradcam = CAM.GradCAMPlusPlus(
                     model=model,
                     target_layers=get_cam_layers(model.base, model.name),
                     reshape_transform=get_reshaper(model.name, image.width, image.height)
@@ -220,8 +217,3 @@ class BTPredictor(ClsPredictor):
 
         print('done pred', image_path)
         return o, features, cam_image
-
-
-@lru_cache
-def get_predictor(checkpoint_path):
-    return BTPredictor(checkpoint_path)

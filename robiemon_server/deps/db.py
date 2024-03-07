@@ -1,10 +1,7 @@
-from fastapi import Request
-from sqlalchemy.orm import sessionmaker, Session
-from ..lib.db import SessionLocal
+from tinydb import TinyDB
+from functools import lru_cache
+from .config import Config
 
-def get_db() -> Session:
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
+@lru_cache
+def get_db(config:Config=Depends()) -> TinyDB:
+    db = TinyDB()
