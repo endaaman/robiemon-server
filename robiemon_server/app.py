@@ -16,7 +16,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 
 from .lib import get_hash
-from .lib.worker import wait, unlock, poll, get_proc_count, add_proc2, add_coro2
+from .lib.worker import wait, unlock, poll, poll1, get_proc_count, add_proc2, add_coro2
 
 
 # from .api import router as api_router
@@ -77,6 +77,9 @@ class BaseDFDriver:
     def get_df(self):
         return get_df(self.get_name())
 
+    def set_df(self, df):
+        set_df(self.get_name(), df)
+
     def get_models(self):
         df = self.get_df()
         cls = self.get_cls()
@@ -85,9 +88,10 @@ class BaseDFDriver:
     def add(self, model):
         add_data(self.get_name(), model.dict())
 
+
 class BTDFDriver(BaseDFDriver):
     def get_name(self):
-        raise 'bt_results'
+        return 'bt_results'
 
     def get_cls(self):
         return BTResult
@@ -117,7 +121,7 @@ class ProcessBTTaks:
             return
 
         task.status = STATUS_PROCESSING
-        poll()
+        poll1()
 
         memo = ''
 
@@ -159,7 +163,7 @@ class ProcessBTTaks:
             task.status = STATUS_DONE
 
         await asyncio.sleep(1)
-        poll()
+        poll1()
         print('PRED DONE', task.timestamp)
 
 
@@ -243,8 +247,16 @@ async def post_fake(dri=Depends(BTDFDriver)):
         G=0.1,
         B=0.1,
     )
-    dri.add_data(result)
-    poll()
+    dri.add(result)
+    poll1()
+    return JSONResponse(content={'message': 'ok'})
+
+@app.delete('/fake')
+async def post_fake(dri:BTDFDriver=Depends(BTDFDriver)):
+    df = dri.get_df()
+    df = df.iloc[:0]
+    dri.set_df(df)
+    poll1()
     return JSONResponse(content={'message': 'ok'})
 
 
@@ -253,9 +265,13 @@ async def post_fake(dri=Depends(BTDFDriver)):
 class Status:
     def __init__(self, ):
         pass
-    async def get(self):
-        return {'count': get_proc_count()}
 
+    async def get(self):
+        bt_results = [BTResult(**row).dict() for i, row in get_df('bt_results').iterrows()]
+        return {
+            'count': get_proc_count(),
+            'bt_results': bt_results,
+        }
 
 
 ## API
@@ -275,7 +291,7 @@ async def send_status(status):
     while True:
         await wait()
         data = await status.get()
-        data_str = json.dumps()
+        data_str = json.dumps(data)
         yield f'data: {data_str}\n\n'
         await asyncio.sleep(1)
 
@@ -297,8 +313,7 @@ async def status_sse(
 
 
 
-
-@router.post('/predict/bt')
+# @router.post('/predict/bt')
 async def predict(
     file: UploadFile = File(...),
     scale: float = Form(),
@@ -348,5 +363,4 @@ async def predict(
         **task.dict()
     })
 
-# api_router = router
-# app.include_router(router)
+app.include_router(router)

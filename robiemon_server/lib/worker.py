@@ -1,6 +1,7 @@
 import asyncio
 import queue
 import inspect
+import threading
 from concurrent.futures import ThreadPoolExecutor
 
 global_started = False
@@ -63,9 +64,29 @@ def add_coro2(coro, *arg, **kwargs):
         await coro(*arg, **kwargs)
     return add_coro(inner)
 
+def debounce(wait):
+    def decorator(fn):
+        timer = None
+        def debounced(*args, **kwargs):
+            nonlocal timer
+            def call_it():
+                fn(*args, **kwargs)
+            if timer is not None:
+                timer.cancel()
+            timer = threading.Timer(wait, call_it)
+            timer.start()
+        return debounced
+    return decorator
+
+
 def poll():
     global_event.set()
     global_event.clear()
 
+@debounce(1.0)
+def poll1():
+    poll()
+
 def unlock():
     global_event.set()
+
