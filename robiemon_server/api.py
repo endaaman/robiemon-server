@@ -155,36 +155,6 @@ def read_items():
     return JSONResponse(content=w)
 
 
-async def send_status(state, worker, db):
-    while True:
-        status = await get_status(db)
-        status_str = json.dumps(status)
-        yield f'data: {status_str}\n\n'
-        await asyncio.sleep(1)
-        await worker.wait()
-
-
-@router.get('/status_sse')
-async def status_sse(
-    request: Request,
-    response: Response,
-    worker: Worker = Depends(),
-    db: Session = Depends(get_db),
-):
-    state = request.app.state
-    response.headers['Cache-Control'] = 'no-cache'
-    response.headers['Content-Type'] = 'text/event-stream'
-    response.headers['Connection'] = 'keep-alive'
-    response.headers['X-Accel-Buffering'] = 'no'
-    return StreamingResponse(
-        send_status(state, worker, db),
-        media_type='text/event-stream',
-    )
-
-@router.get('/status')
-async def status(response: Response, db: Session = Depends(get_db)):
-    status = await get_status(db)
-    return JSONResponse(content=status)
 
 @router.delete('/tasks/{timestamp}')
 async def read_results(

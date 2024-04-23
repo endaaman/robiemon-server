@@ -6,14 +6,9 @@ from pydantic import BaseSettings, validator
 
 
 class Config(BaseSettings):
-    # "sqlite:///./sql_app.db"
-    DB_URL: str = 'sqlite:///./data/server.db'
-
     DATA_DIR: str = 'data'
-    STATIC_DIR: str = 'data/static'
-    UPLOAD_DIR: str = 'data/static/uploads'
-    THUMB_DIR: str = 'data/static/thumbs'
-    CAM_DIR: str = 'data/static/cams'
+    RESULT_DIR: str = 'data/results/'
+
     WEIGHT_DIR: str = 'data'
 
     class Config:
