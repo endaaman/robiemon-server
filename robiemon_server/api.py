@@ -158,8 +158,19 @@ async def predict(
         raise HTTPException(status_code=404, detail='Scale is required')
 
     timestamp = get_last_timestamp()
-
     hash = get_hash(timestamp)
+
+    task = BTTask(
+        timestamp=timestamp,
+        name=hash[:8],
+        status=STATUS_PENDING,
+        mode='bt',
+        with_cam=cam,
+        weight=weight,
+    )
+    print('added', task)
+    task_service.add(task)
+
     org_img = Image.open(io.BytesIO(await file.read()))
 
     result_dir = f'data/results/bt/{timestamp}'
@@ -183,19 +194,8 @@ async def predict(
     loop = asyncio.get_running_loop()
     with ThreadPoolExecutor() as executor:
         await loop.run_in_executor(executor, process_bt_images)
-
-    task = BTTask(
-        timestamp=timestamp,
-        name=hash[:8],
-        status=STATUS_PENDING,
-        mode='bt',
-        cam=cam,
-        weight=weight,
-    )
-
-    task_service.add(task)
+    poll()
     add_coro2(bt_predict_service.predict, task)
-
     return JSONResponse(content={
         **task.dict()
     })
@@ -226,7 +226,7 @@ async def post_fake(bt_result_service:BTResultService=Depends(BTResultService)):
     result = BTResult(
         timestamp=timestamp,
         name='fake',
-        with_cam=False,
+        with_with_cam=False,
         weight='fake weight',
         memo='memo',
         L=0.7,

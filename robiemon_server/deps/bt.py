@@ -276,7 +276,8 @@ class BTPredictService:
 
     async def predict(self, task:BTTask):
         if task.status != STATUS_PENDING:
-            print(f'Task {task.timestamp} is not pending')
+            print(f'Task {task.timestamp} is not pending', task.status)
+            print(task)
             return
 
         task.status = STATUS_PROCESSING
@@ -291,12 +292,12 @@ class BTPredictService:
             pred, features, cam_image = await self.predict_image(
                 f'data/weights/bt/{task.weight}',
                 f'data/results/bt/{task.timestamp}/original.png',
-                with_cam=task.cam,
+                with_cam=task.with_cam,
             )
             if cam_image:
                 cam_image.save(f'data/results/bt/{task.timestamp}/cam.png')
             else:
-                if task.cam:
+                if task.with_cam:
                     memo = 'Too large to generate CAM.'
             ok = True
         except torch.cuda.OutOfMemoryError as e:

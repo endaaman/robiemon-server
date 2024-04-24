@@ -19,7 +19,7 @@ class BaseTask(BaseModel):
     mode: str = Field(..., regex=r'^bt$')
 
 class BTTask(BaseTask):
-    cam: bool
+    with_cam: bool
     weight: str
 
 class BTResult(BaseModel):
