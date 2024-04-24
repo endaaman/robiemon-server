@@ -1,8 +1,10 @@
 import os
 import pandas as pd
 import time
+import asyncio
 import threading
 from watchdog.observers import Observer
+from watchdog.observers.polling import PollingObserver
 from watchdog.events import FileSystemEventHandler
 
 from ..schemas import BTResult, Scale
@@ -37,6 +39,7 @@ default_scales = [{
 
 
 dfs_lock = threading.Lock()
+saving = False
 global_dfs = {}
 EXCEL_PATH = 'data/db.xlsx'
 schemas = {
@@ -44,12 +47,28 @@ schemas = {
     'scales': (Scale, default_scales),
 }
 
+async def release_lock():
+    global saving
+    print('start releasing lock')
+    await asyncio.sleep(3)
+    print('end wait release lock')
+    saving = False
+    dfs_lock.release()
+    print('done release lock')
+
 def save_dfs():
-    with dfs_lock:
-        with pd.ExcelWriter(EXCEL_PATH, engine='xlsxwriter') as writer:
-            for k, df in global_dfs.items():
-                df.to_excel(writer, sheet_name=k, index=False)
-        print('Save', EXCEL_PATH)
+    global saving
+    dfs_lock.acquire()
+    saving = True
+    with pd.ExcelWriter(EXCEL_PATH, engine='xlsxwriter') as writer:
+        for k, df in global_dfs.items():
+            df.to_excel(writer, sheet_name=k, index=False)
+    print('Save', EXCEL_PATH)
+
+    loop = asyncio.get_running_loop()
+    loop.create_task(release_lock())
+    # asyncio.create_task(release_lock())
+
 
 def empry_df_by_schema(S, values):
     return pd.DataFrame(
@@ -82,18 +101,21 @@ class WatchedFileHandler(FileSystemEventHandler):
 
     def on_modified(self, event):
         if not event.is_directory and event.src_path == self.filename:
+            print(event.src_path, self.filename)
             self.reload()
 
     @debounce(1)
     def reload(self):
-        if dfs_lock.acquire(blocking=False):
-            print('not locked -> reload')
+        dfs_lock.acquire()
+        if not saving:
+            print('not locked -> reload', saving)
             reload_dfs()
             poll()
-            dfs_lock.release()
+        dfs_lock.release()
 
 
-global_observer = Observer()
+# global_observer = Observer()
+global_observer = PollingObserver()
 
 def start_watching_dfs():
     handler = WatchedFileHandler(EXCEL_PATH)
@@ -101,6 +123,8 @@ def start_watching_dfs():
     global_observer.start()
 
 def stop_watching_dfs():
+    if dfs_lock.acquire(blocking=False):
+        dfs_lock.release()
     global_observer.stop()
 
 

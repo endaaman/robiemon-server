@@ -31,7 +31,7 @@ async def main_loop():
     print('start main loop')
     loop = asyncio.get_running_loop()
     while len(global_procs) > 0:
-        proc = global_procs[-1]
+        proc = global_procs[0]
         with ThreadPoolExecutor() as executor:
             await loop.run_in_executor(executor, proc)
         global_procs.pop(0)

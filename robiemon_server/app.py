@@ -51,9 +51,13 @@ async def on_startup():
 
 @app.on_event('shutdown')
 def shutdown_event():
+    print('shutdown')
     unlock()
+    print('done unlock')
     stop_watching_dfs()
+    print('stop watch')
     save_dfs()
+    print('save dfs')
 
 
 class Foo1:

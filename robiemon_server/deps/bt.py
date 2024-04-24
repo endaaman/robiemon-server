@@ -325,6 +325,6 @@ class BTPredictService:
             self.bt_result_service.add(result)
             task.status = STATUS_DONE
 
-        poll()
         await asyncio.sleep(1)
+        poll()
         print('PRED DONE', task.timestamp)
