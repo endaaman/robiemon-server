@@ -6,6 +6,11 @@ class Weight(BaseModel):
     weight: str
     name: str
 
+class Scale(BaseModel):
+    label: str
+    scale: float
+    enabled: bool
+
 
 class BaseTask(BaseModel):
     timestamp: int
@@ -13,15 +18,11 @@ class BaseTask(BaseModel):
     status: str = Field(..., regex=r'^pending|processing|done$')
     mode: str = Field(..., regex=r'^bt$')
 
-
-# BT
 class BTTask(BaseTask):
     cam: bool
     weight: str
 
-
 class BTResult(BaseModel):
-    id: int = -1
     timestamp: int
     name: str
     with_cam: bool

@@ -1,235 +1,151 @@
 import os
 import io
-import re
-import json
-import threading
-import logging
-import asyncio
-import shutil
 import time
-import hashlib
-from datetime import datetime
+import json
+import asyncio
+from concurrent.futures import ThreadPoolExecutor
 
-import uvicorn
-from fastapi import FastAPI, APIRouter, HTTPException, Depends, Request, Header, File, UploadFile, Response, Form
-from fastapi.staticfiles import StaticFiles
-from fastapi.responses import StreamingResponse, JSONResponse
-from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field
-from sqlalchemy.orm import Session
-
-import numpy as np
 import torch
-
+import numpy as np
+from fastapi import FastAPI, APIRouter, HTTPException, Depends, Request, Header, File, UploadFile, Response, Form
+from fastapi.responses import StreamingResponse, JSONResponse
+from pydantic import BaseModel
 from PIL import Image
-from .lib.config import config
-from .deps.bt import BTService
-from .deps.db import get_db
-from .deps.worker import Worker
-from .models import BTResultDB
-from .schemas import BTResult, BTTask
 
+from .deps.task import TaskService, get_last_timestamp
+from .deps.scale import ScaleService
+from .deps.bt import BTResultService, BTPredictService
+from .schemas import BTTask, BTResult
 
-logger = logging.getLogger('uvicorn')
+from .lib import asdicts, get_hash
+from .lib.worker import poll, wait, add_coro2
+from .constants import *
 
-STATUS_PENDING = 'pending'
-STATUS_PROCESSING = 'processing'
-STATUS_DONE = 'done'
-STATUS_TOO_LARGE = 'too_large'
-STATUS_ERROR = 'error'
-
-THUMB_SIZE = 640
-
-
-
-async def process_bt_task(task:BTTask, worker, db, bt_service):
-    if task.status != STATUS_PENDING:
-        print(f'Task {task.timestamp} is not pending')
-        return
-    print('Task accepted')
-    print(task)
-
-    task.status = STATUS_PROCESSING
-    worker.poll()
-
-    memo = ''
-
-    ok = False
-    try:
-        result, features, cam_image = await bt_service.predict(
-            f'data/weights/bt/{task.weight}',
-            # 'data/weights/bt_resnetrs50_f0.pt',
-            os.path.join(config.UPLOAD_DIR, f'{task.timestamp}.png'),
-            with_cam=task.cam,
-            # with_cam=True,
-        )
-        if cam_image:
-            cam_image.save(os.path.join(config.CAM_DIR, f'{task.timestamp}.png'))
-        else:
-            if task.cam:
-                memo = 'Too large to generate CAM.'
-        ok = True
-    except torch.cuda.OutOfMemoryError as e:
-        print(e)
-        task.status = STATUS_TOO_LARGE
-    except Exception as e:
-        print(e)
-        task.status = STATUS_ERROR
-
-
-    if ok:
-        db_item = BTResultDB(
-            timestamp=task.timestamp,
-            name=task.name,
-            cam=bool(cam_image),
-            weight=task.weight,
-            memo=memo,
-            L=result[0],
-            M=result[1],
-            G=result[2],
-            B=result[3],
-        )
-        db.add(db_item)
-        db.commit()
-        db.refresh(db_item)
-
-        task.status = STATUS_DONE
-
-    await asyncio.sleep(1)
-    worker.poll()
-    print('PRED DONE', task.timestamp)
-
-
-tasks = []
-bt_weights = [
-    {
-        'label': 'ConvNeXt V2 Nano',
-        'weight': 'convnextv2_nano_all.pt',
-    },
-    # {
-    #     'label': 'CAFormer S18',
-    #     'weight': 'caformer_s18_all.pt',
-    # },
-    {
-        'label': 'ResNet RS50',
-        'weight': 'resnetrs50_all.pt',
-    },
-    {
-        'label': 'ResNet RS50(fold0)',
-        'weight': 'resnetrs50_f0.pt',
-    },
-]
-
-async def get_status(db):
-    bt_results = [
-        BTResult.from_orm(r)
-        for r in db.query(BTResultDB).all()
-    ]
-
-    status = {
-        'tasks': [t.dict() for t in tasks],
-        'bt_results': [r.dict() for r in  bt_results],
-        'bt_weights': bt_weights,
-    }
-
-    return status
-
+## API
 
 router = APIRouter(
     prefix='/api',
     tags=['api'],
 )
 
-@router.get('/weights')
-def read_items():
-    w = [
-        {
-            'label': 'ResNet-RS 50',
-            'weight': 'bt_resnetrs50_f0.pt',
-        },
-        {
-            'label': 'EfficientNet B0',
-            'weight': 'bt_efficientnet_b0_f5.pt',
+
+
+## Status
+
+bt_weights = [
+    {
+        'label': 'ConvNeXt V2 Nano',
+        'weight': 'convnextv2_nano_v4.pt',
+    },
+    {
+        'label': 'ResNet RS50',
+        'weight': 'resnetrs50_v4.pt',
+    },
+]
+
+
+class Status:
+    def __init__(self,
+                 bt_result_service=Depends(BTResultService),
+                 task_service=Depends(TaskService),
+                 scale_service=Depends(ScaleService),
+                 ):
+        self.scale_service = scale_service
+        self.task_service = task_service
+        self.bt_result_service = bt_result_service
+
+    async def get(self):
+        return {
+            'scales': asdicts(self.scale_service.all()),
+            'tasks': asdicts(self.task_service.all()),
+            'bt_results': asdicts(self.bt_result_service.all()),
+            'bt_weights': bt_weights,
         }
-    ]
-    return JSONResponse(content=w)
 
 
+@router.get('/status')
+async def status(response: Response, status: Status = Depends()):
+    data = await status.get()
+    return JSONResponse(content=data)
+
+async def send_status(status):
+    print('Connected')
+    while True:
+        print('SSE sent.')
+        data = await status.get()
+        data_str = json.dumps(data)
+        yield f'data: {data_str}\n\n'
+        await wait()
+        await asyncio.sleep(0.5)
+
+
+@router.get('/status_sse')
+async def status_sse(
+    request: Request,
+    response: Response,
+    status: Status = Depends(),
+):
+    response.headers['Cache-Control'] = 'no-cache'
+    response.headers['Content-Type'] = 'text/event-stream'
+    response.headers['Connection'] = 'keep-alive'
+    response.headers['X-Accel-Buffering'] = 'no'
+    return StreamingResponse(
+        send_status(status),
+        media_type='text/event-stream',
+    )
+
+
+## Tasks
 
 @router.delete('/tasks/{timestamp}')
-async def read_results(
+async def delete_task(
     timestamp: int,
-    worker: Worker = Depends(),
-    db:Session = Depends(get_db)
+    task_service:TaskService=Depends(TaskService),
 ):
-    needle = -1
-    for i, t in enumerate(tasks):
-        if t.timestamp == timestamp:
-            needle = i
-    if needle < 0:
-        return JSONResponse(content={
-            'message': 'No Task found'
-        }, status_code=404)
-
-
-    del tasks[needle]
-    worker.poll()
+    ok = task_service.remove(timestamp=timestamp)
+    if not ok:
+        raise HTTPException(status_code=404)
+    poll()
     return JSONResponse(content={
-        'message': 'Task deleted'
-    })
-
-
-@router.get('/results/bt')
-async def read_result(db:Session = Depends(get_db)):
-    return db.query(BTResultDB).all()
-
-
-@router.delete('/results/bt/{id}')
-async def read_results(
-    id: int,
-    worker: Worker = Depends(),
-    db:Session = Depends(get_db)
-):
-    db_item = db.query(BTResultDB).filter(BTResultDB.id == id).first()
-    if db_item is None:
-        raise HTTPException(status_code=404, detail='Item not found')
-
-    db.delete(db_item)
-    db.commit()
-    worker.poll()
-    return JSONResponse(content={
-        'message': 'Record deleted'
+        'message': f'Task({timestamp}) deleted'
     })
 
 
 
-class PatchResult(BaseModel):
+## BT Result
+
+@router.delete('/results/bt/{timestamp}')
+async def delete_bt_result(
+    timestamp: int,
+    bt_result_service:BTResultService=Depends(BTResultService),
+):
+    ok = bt_result_service.remove(timestamp=timestamp)
+    if not ok:
+        raise HTTPException(status_code=404)
+    poll()
+    return JSONResponse(content={'message': f'BT result({timestamp}) deleted'})
+
+
+class PatchBTResult(BaseModel):
     name: str | None = None
     memo: str | None = None
 
 @router.patch('/results/bt/{id}')
-async def patch_results(
-    id: int,
-    q: PatchResult,
-    worker:Worker = Depends(),
-    db:Session = Depends(get_db)
+async def patch_bt_result(
+    timestamp: int,
+    q: PatchBTResult,
+    bt_result_service=Depends(BTResultService),
 ):
-    db_item = db.query(BTResultDB).filter(BTResultDB.id == id).first()
-    print('query', q)
-    if q.name is not None:
-        db_item.name = q.name
-        print('update name', q.name)
-    if q.memo is not None:
-        db_item.memo = q.memo
-        print('update memo', q.memo)
-    db.commit()
-    worker.poll()
-
+    ok = bt_result_service.edit(timestamp, q.dict())
+    if not ok:
+        raise HTTPException(status_code=404)
+    poll()
     return JSONResponse(content={
-        'message': 'Task updated'
+        'message': 'Editted BT result'
     })
 
 
+## PREDICT
 
 @router.post('/predict/bt')
 async def predict(
@@ -237,34 +153,38 @@ async def predict(
     scale: float = Form(),
     cam: bool = Form(),
     weight: str = Form(),
-    worker:Worker = Depends(),
-    bt_service: BTService = Depends(),
-    db:Session = Depends(get_db),
+    task_service = Depends(TaskService),
+    bt_predict_service = Depends(BTPredictService),
 ):
     if not scale:
         raise HTTPException(status_code=404, detail='Scale is required')
 
+    timestamp = get_last_timestamp()
+
+    hash = get_hash(timestamp)
     org_img = Image.open(io.BytesIO(await file.read()))
-    img = org_img.resize((int(org_img.width*scale), int(org_img.height * scale)), Image.Resampling.LANCZOS)
 
-    long = max(org_img.width, org_img.height)
-    if long > THUMB_SIZE:
-        landscape = org_img.width > org_img.height
-        short = min(org_img.width, org_img.height)
-        new_long = round(THUMB_SIZE * long / short)
-        size = (new_long, THUMB_SIZE) if landscape else (THUMB_SIZE, new_long)
-        thumb_img = org_img.resize(size, Image.Resampling.LANCZOS)
-    else:
-        thumb_img = img
+    result_dir = f'data/results/bt/{timestamp}'
+    os.makedirs(result_dir, exist_ok=True)
 
-    timestamp = int(time.time())
-    if len(tasks) > 0:
-        last_timestap = tasks[-1].timestamp
-        if last_timestap >= timestamp:
-            timestamp = last_timestap + 1
+    def process_bt_images():
+        size = (int(org_img.width*scale), int(org_img.height * scale))
+        scaled_img = org_img.resize(size, Image.Resampling.LANCZOS)
+        long = max(org_img.width, org_img.height)
+        if long > THUMB_SIZE:
+            landscape = org_img.width > org_img.height
+            short = min(org_img.width, org_img.height)
+            new_long = round(THUMB_SIZE * long / short)
+            size = (new_long, THUMB_SIZE) if landscape else (THUMB_SIZE, new_long)
+            thumb_img = org_img.resize(size, Image.Resampling.LANCZOS)
+        else:
+            thumb_img = scaled_img
+        scaled_img.save(f'{result_dir}/original.png')
+        thumb_img.convert('RGB').save(f'{result_dir}/thumb.png')
 
-    base = str(timestamp).encode('utf-8')
-    hash = hashlib.sha256(base).hexdigest()
+    loop = asyncio.get_running_loop()
+    with ThreadPoolExecutor() as executor:
+        await loop.run_in_executor(executor, process_bt_images)
 
     task = BTTask(
         timestamp=timestamp,
@@ -274,26 +194,55 @@ async def predict(
         cam=cam,
         weight=weight,
     )
-    tasks.append(task)
 
-    img.save(os.path.join(config.UPLOAD_DIR, f'{timestamp}.png'))
-    thumb_img.convert('RGB').save(os.path.join(config.THUMB_DIR, f'{timestamp}.jpg'))
-
-    worker.add_task(process_bt_task, task, worker, db, bt_service)
-    worker.poll()
+    task_service.add(task)
+    add_coro2(bt_predict_service.predict, task)
 
     return JSONResponse(content={
         **task.dict()
     })
 
 
-@router.post('/predict/eosino')
-async def predict(
-    file: UploadFile = File(...),
-    worker:Worker = Depends(),
-    bt_service: BTService = Depends(),
-    db:Session = Depends(get_db),
+
+## Scale
+@router.delete('/scales/{index}')
+async def delete_scale(
+    index: int,
+    scale_service:ScaleService=Depends(ScaleService),
 ):
+    ok = scale_service.remove(i=index)
+    if not ok:
+        raise HTTPException(status_code=404)
+    poll()
     return JSONResponse(content={
-        'message': 'WIP'
+        'message': f'Scale({index}) deleted'
     })
+
+
+
+## Debug
+
+@router.post('/fake')
+async def post_fake(bt_result_service:BTResultService=Depends(BTResultService)):
+    timestamp = get_last_timestamp()
+    result = BTResult(
+        timestamp=timestamp,
+        name='fake',
+        with_cam=False,
+        weight='fake weight',
+        memo='memo',
+        L=0.7,
+        M=0.1,
+        G=0.1,
+        B=0.1,
+    )
+    bt_result_service.add(result)
+    poll()
+    return JSONResponse(content={'message': 'ok'})
+
+@router.delete('/fake')
+async def post_fake(bt_result_service:BTResultService=Depends(BTResultService)):
+    last = bt_result_service.all()[-1]
+    bt_result_service.remove(timestamp=last.timestamp)
+    poll()
+    return JSONResponse(content={'message': 'ok'})

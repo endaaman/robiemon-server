@@ -79,13 +79,13 @@ def debounce(wait):
     return decorator
 
 
-def poll():
+def poll0():
     global_event.set()
     global_event.clear()
 
-@debounce(1.0)
-def poll1():
-    poll()
+@debounce(0.1)
+def poll():
+    poll0()
 
 def unlock():
     global_event.set()
