@@ -69,9 +69,7 @@ async def status(response: Response, status: Status = Depends()):
     return JSONResponse(content=data)
 
 async def send_status(status):
-    print('Connected')
     while True:
-        print('SSE sent.')
         data = await status.get()
         data_str = json.dumps(data)
         yield f'data: {data_str}\n\n'

@@ -6,6 +6,7 @@ from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 
 from ..schemas import BTResult, Scale
+from ..lib import debounce
 from ..lib.worker import poll
 
 default_scales = [{
@@ -81,13 +82,15 @@ class WatchedFileHandler(FileSystemEventHandler):
 
     def on_modified(self, event):
         if not event.is_directory and event.src_path == self.filename:
-            if dfs_lock.acquire(blocking=False):
-                print('not locked -> reload')
-                reload_dfs()
-                poll()
-                dfs_lock.release()
-            else:
-                print('locked -> skip')
+            self.reload()
+
+    @debounce(1)
+    def reload(self):
+        if dfs_lock.acquire(blocking=False):
+            print('not locked -> reload')
+            reload_dfs()
+            poll()
+            dfs_lock.release()
 
 
 global_observer = Observer()
