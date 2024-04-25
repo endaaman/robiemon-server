@@ -14,6 +14,59 @@ from ..schemas import BTResult, Scale
 from ..lib import debounce
 from ..lib.worker import poll
 
+
+EXCEL_PATH = 'data/db.xlsx'
+
+
+class WatchedFileHandler(FileSystemEventHandler):
+    def __init__(self, filename):
+        self.filename = filename
+        self.stunned_until = -1
+
+    def stun(self, duration=5):
+        self.stunned_until = time.time() + duration
+
+    def is_stunned(self):
+        return time.time() < self.stunned_until
+
+    def on_modified(self, event):
+        if not event.is_directory and event.src_path == self.filename:
+            print(event.src_path, self.filename)
+            self.reload()
+
+    @debounce(1)
+    def reload(self):
+        if self.is_stunned():
+            print(f'Skip reloading(Watchdog is stunned).')
+            return
+        print('Watchdog: reloading excel')
+        reload_dfs()
+        poll()
+
+main_loop = None
+global_lock = threading.Lock()
+global_dfs = {}
+global_observer = PollingObserver()
+global_handler = WatchedFileHandler(EXCEL_PATH)
+
+
+def start_watching_dfs():
+    global_observer.schedule(global_handler, path=EXCEL_PATH, recursive=False)
+    global_observer.start()
+
+def stop_watching_dfs():
+    if global_lock.acquire(blocking=False):
+        global_lock.release()
+    global_observer.stop()
+
+def calc_len(x):
+    if isinstance(x, (float, np.floating)):
+        # 少数は固定幅
+        return 8
+    # 最大も制限
+    return min(len(str(x)), 20)
+
+
 default_scales = [{
     'label': 'VS x20 440nm/px',
     'scale': 1.0,
@@ -40,31 +93,18 @@ default_scales = [{
     'enabled': True,
 }]
 
-
-dfs_lock = threading.Lock()
-main_loop = None
-global_dfs = {}
-EXCEL_PATH = 'data/db.xlsx'
 schemas = {
     'bt_results': (BTResult, []),
     'scales': (Scale, default_scales),
 }
 
-def calc_len(x):
-    if isinstance(x, (float, np.floating)):
-        # 少数は固定幅
-        return 8
-    # 最大も制限
-    return min(len(str(x)), 20)
-
-async def _save_dfs(names=None):
-    print('Lock acquired')
-
-    with ThreadPoolExecutor() as executor:
-        await main_loop.run_in_executor(executor, dfs_lock.acquire, True, 5)
+def save_dfs(names=None):
     if names:
         names = global_dfs.keys()
 
+    global_handler.stun()
+    print('Lock acquired')
+    global_lock.acquire(timeout=5)
     try:
         with pd.ExcelWriter(EXCEL_PATH, engine='xlsxwriter') as writer:
             workbook = writer.book
@@ -94,12 +134,9 @@ async def _save_dfs(names=None):
         raise e
     finally:
         # watchdogの変更検知に捕まらないように3秒待ってからlockを開放する
-        await asyncio.sleep(0.5)
+        # await asyncio.sleep(2)
         print('Lock released')
-        dfs_lock.release()
-
-def save_dfs(names=None):
-    main_loop.create_task(_save_dfs(names))
+        global_lock.release()
 
 
 def empry_df_by_schema(S, values):
@@ -153,39 +190,6 @@ def reload_dfs():
             print()
         print(f'Loaded database: {EXCEL_PATH}')
 
-
-class WatchedFileHandler(FileSystemEventHandler):
-    def __init__(self, filename):
-        self.filename = filename
-
-    def on_modified(self, event):
-        if not event.is_directory and event.src_path == self.filename:
-            print(event.src_path, self.filename)
-            self.reload()
-
-    @debounce(1)
-    def reload(self):
-        if dfs_lock.acquire(blocking=False):
-            print('Watchdog: reloading excel')
-            reload_dfs()
-            poll()
-            dfs_lock.release()
-        else:
-            print(f'Skip reloading({EXCEL_PATH} is locked).')
-
-
-# global_observer = Observer()
-global_observer = PollingObserver()
-
-def start_watching_dfs():
-    handler = WatchedFileHandler(EXCEL_PATH)
-    global_observer.schedule(handler, path=EXCEL_PATH, recursive=False)
-    global_observer.start()
-
-def stop_watching_dfs():
-    if dfs_lock.acquire(blocking=False):
-        dfs_lock.release()
-    global_observer.stop()
 
 
 def get_df(name):
