@@ -73,8 +73,8 @@ async def send_status(status):
         data = await status.get()
         data_str = json.dumps(data)
         yield f'data: {data_str}\n\n'
-        await wait()
         await asyncio.sleep(0.5)
+        await wait()
 
 
 @router.get('/status_sse')
@@ -128,15 +128,23 @@ class PatchBTResult(BaseModel):
     name: str | None = None
     memo: str | None = None
 
-@router.patch('/results/bt/{id}')
+@router.patch('/results/bt/{timestamp}')
 async def patch_bt_result(
     timestamp: int,
     q: PatchBTResult,
     bt_result_service=Depends(BTResultService),
 ):
-    ok = bt_result_service.edit(timestamp, q.dict())
-    if not ok:
+    r = bt_result_service.find(timestamp=timestamp)
+    if not r:
         raise HTTPException(status_code=404)
+
+    if q.name is not None:
+        r.name = q.name
+    if q.memo is not None:
+        r.memo = q.memo
+    ok = bt_result_service.update(r)
+    if not ok:
+        raise HTTPException(status_code=400)
     poll()
     return JSONResponse(content={
         'message': 'Editted BT result'
@@ -171,7 +179,7 @@ async def predict(
     print('added', task)
     task_service.add(task)
 
-    org_img = Image.open(io.BytesIO(await file.read()))
+    org_img = Image.open(io.BytesIO(await file.read())).convert('RGB')
 
     result_dir = f'data/results/bt/{timestamp}'
     os.makedirs(result_dir, exist_ok=True)
@@ -188,8 +196,8 @@ async def predict(
             thumb_img = org_img.resize(size, Image.Resampling.LANCZOS)
         else:
             thumb_img = scaled_img
-        scaled_img.save(f'{result_dir}/original.png')
-        thumb_img.convert('RGB').save(f'{result_dir}/thumb.png')
+        scaled_img.save(f'{result_dir}/original.jpg')
+        thumb_img.save(f'{result_dir}/thumb.png')
 
     loop = asyncio.get_running_loop()
     with ThreadPoolExecutor() as executor:

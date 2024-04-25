@@ -15,7 +15,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 
 from .lib import get_hash
-from .lib.df import reload_dfs, save_dfs, start_watching_dfs, stop_watching_dfs
+from .lib.df import init_dfs, save_dfs, start_watching_dfs, stop_watching_dfs
 from .lib.worker import wait, unlock, poll, get_proc_count, add_proc2, add_coro2
 
 from .api import router as api_router
@@ -46,7 +46,7 @@ async def auto_refresh():
 @app.on_event('startup')
 async def on_startup():
     asyncio.create_task(auto_refresh())
-    reload_dfs()
+    init_dfs()
     start_watching_dfs()
 
 @app.on_event('shutdown')
@@ -55,9 +55,9 @@ def shutdown_event():
     unlock()
     print('done unlock')
     stop_watching_dfs()
-    print('stop watch')
-    save_dfs()
-    print('save dfs')
+    # print('stop watch')
+    # save_dfs()
+    # print('save dfs')
 
 
 class Foo1:
@@ -95,6 +95,15 @@ async def thread(t:int=Form()):
     loop = asyncio.get_running_loop()
     with ThreadPoolExecutor() as executor:
         await loop.run_in_executor(executor, th)
+    return JSONResponse(content={'message': 'ok'})
+
+async def delayed():
+    await asyncio.sleep(5)
+    print('done 3s')
+
+@app.get('/after')
+async def thread():
+    asyncio.create_task(delayed())
     return JSONResponse(content={'message': 'ok'})
 
 

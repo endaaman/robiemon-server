@@ -11,6 +11,7 @@ from PIL import Image
 from PIL.Image import Image as ImageType
 import cv2
 import numpy as np
+import pandas as pd
 import torch
 import timm
 from torch import nn
@@ -214,30 +215,44 @@ class BTDFDriver(BaseDFDriver):
     def get_cls(self):
         return BTResult
 
+class BaseService:
+    @property
+    def df(self):
+        return self.driver.get_df()
 
-class BTResultService:
+    def add(self, model):
+        data = model.dict()
+        if len(self.df) == 0:
+            df_new = pd.DataFrame([data])
+        else:
+            df_new = pd.concat([self.df, pd.DataFrame([data])], ignore_index=True)
+        self.driver.replace(df_new)
+
+
+class BTResultService(BaseService):
     def __init__(self, driver:BTDFDriver=Depends(BTDFDriver)):
         self.driver = driver
 
-    def add(self, result:BTResult):
-        self.driver.add(result)
-
-    def find(self, **kwargs):
+    def find_all(self, **kwargs):
         assert kwargs
         k, v = next(iter(kwargs.items()))
-        df = self.driver.get()
+        df = self.df
         rows = df[df[k] == v]
-        if len(rows) == 0:
+        return [BTResult(**row) for i, row in rows.iterrows()]
+
+    def find(self, **kwargs):
+        rr = self.find_all(**kwargs)
+        if len(rr) == 0:
             return None
-        if len(rows) > 1:
+        if len(rr) > 1:
             print('Items duplicated:')
-            print(rows)
-        return BTResult(**rows.iloc[0].todict())
+            print(rr)
+        return rr[0]
 
     def remove(self, **kwargs):
         assert kwargs
         k, v = next(iter(kwargs.items()))
-        df = self.driver.get()
+        df = self.df
         df_new = df[df[k] != v]
         if len(df) - len(df_new) != 1:
             return False
@@ -245,7 +260,7 @@ class BTResultService:
         return True
 
     def edit(self, timestamp:int, patch:dict):
-        df = self.driver.get()
+        df = self.df
         needle = df['timestamp'] == timestamp
         rows = df[needle]
         if len(rows) == 0:
@@ -256,9 +271,12 @@ class BTResultService:
         for k in patch.keys():
             if not k in df.columns:
                 raise RuntimeError('Invalid key:', k)
-
         df.loc[needle, list(patch.keys())] = list(patch.values())
+        self.driver.replace(df)
         return True
+
+    def update(self, r:BTResult):
+        return self.edit(r.timestamp, r.dict())
 
     def all(self):
         return self.driver.all()
@@ -291,7 +309,7 @@ class BTPredictService:
         try:
             pred, features, cam_image = await self.predict_image(
                 f'data/weights/bt/{task.weight}',
-                f'data/results/bt/{task.timestamp}/original.png',
+                f'data/results/bt/{task.timestamp}/original.jpg',
                 with_cam=task.with_cam,
             )
             if cam_image:

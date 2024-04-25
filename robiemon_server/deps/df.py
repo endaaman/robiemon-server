@@ -1,4 +1,4 @@
-from ..lib.df import get_df, set_df, add_data
+from ..lib.df import get_df, set_df
 
 from ..schemas import BTResult
 
@@ -10,16 +10,13 @@ class BaseDFDriver:
     def get_cls(self):
         raise NotImplementedError()
 
-    def get(self):
+    def get_df(self):
         return get_df(self.get_name())
 
-    def replace(self, df):
-        set_df(self.get_name(), df)
-
     def all(self):
-        df = self.get()
+        df = self.get_df()
         cls = self.get_cls()
         return [cls(**row) for i, row in df.iterrows()]
 
-    def add(self, model):
-        add_data(self.get_name(), model.dict())
+    def replace(self, df):
+        set_df(self.get_name(), df)
