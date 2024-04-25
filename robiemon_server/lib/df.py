@@ -3,6 +3,7 @@ import pandas as pd
 import time
 import asyncio
 import threading
+from concurrent.futures import ThreadPoolExecutor
 
 import numpy as np
 from watchdog.observers import Observer
@@ -42,21 +43,12 @@ default_scales = [{
 
 dfs_lock = threading.Lock()
 main_loop = None
-saving = False
 global_dfs = {}
 EXCEL_PATH = 'data/db.xlsx'
 schemas = {
     'bt_results': (BTResult, []),
     'scales': (Scale, default_scales),
 }
-
-async def release_lock():
-    global saving
-    # watchdogの変更検知に捕まらないように3秒待ってからlockを開放する
-    await asyncio.sleep(1)
-    saving = False
-    print('Lock released')
-    dfs_lock.release()
 
 def calc_len(x):
     if isinstance(x, (float, np.floating)):
@@ -65,13 +57,14 @@ def calc_len(x):
     # 最大も制限
     return min(len(str(x)), 20)
 
-def save_dfs(names=None):
-    global saving
+async def _save_dfs(names=None):
     print('Lock acquired')
-    dfs_lock.acquire()
-    saving = True
+
+    with ThreadPoolExecutor() as executor:
+        await main_loop.run_in_executor(executor, dfs_lock.acquire, True, 5)
     if names:
         names = global_dfs.keys()
+
     try:
         with pd.ExcelWriter(EXCEL_PATH, engine='xlsxwriter') as writer:
             workbook = writer.book
@@ -97,12 +90,16 @@ def save_dfs(names=None):
                             width=col_width,
                         )
         print('Save', EXCEL_PATH)
-        # 他スレッドで呼ばれた場合も安全に待つ
     except ValueError as e:
         raise e
     finally:
-        main_loop.create_task(release_lock())
-    # asyncio.create_task(release_lock())
+        # watchdogの変更検知に捕まらないように3秒待ってからlockを開放する
+        await asyncio.sleep(0.5)
+        print('Lock released')
+        dfs_lock.release()
+
+def save_dfs(names=None):
+    main_loop.create_task(_save_dfs(names))
 
 
 def empry_df_by_schema(S, values):
