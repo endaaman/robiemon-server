@@ -53,7 +53,7 @@ schemas = {
 async def release_lock():
     global saving
     # watchdogの変更検知に捕まらないように3秒待ってからlockを開放する
-    await asyncio.sleep(3)
+    await asyncio.sleep(1)
     saving = False
     print('Lock released')
     dfs_lock.release()
