@@ -32,14 +32,14 @@ router = APIRouter(
 
 ## Status
 
-bt_weights = [
+bt_models = [
     {
         'label': 'ConvNeXt V2 Nano',
-        'weight': 'convnextv2_nano_v4.pt',
+        'name': 'convnextv2_nano_v4',
     },
     {
         'label': 'ResNet RS50',
-        'weight': 'resnetrs50_v4.pt',
+        'name': 'convnextv2_nano_v4',
     },
 ]
 
@@ -59,7 +59,7 @@ class Status:
             'scales': asdicts(self.scale_service.all()),
             'tasks': asdicts(self.task_service.all()),
             'bt_results': asdicts(self.bt_result_service.all()),
-            'bt_weights': bt_weights,
+            'bt_models': bt_models,
         }
 
 
@@ -158,7 +158,7 @@ async def predict(
     file: UploadFile = File(...),
     scale: float = Form(),
     cam: bool = Form(),
-    weight: str = Form(),
+    model: str = Form(),
     task_service = Depends(TaskService),
     bt_predict_service = Depends(BTPredictService),
 ):
@@ -174,7 +174,7 @@ async def predict(
         status=STATUS_PENDING,
         mode='bt',
         with_cam=cam,
-        weight=weight,
+        model=model,
     )
     print('added', task)
     task_service.add(task)
@@ -235,7 +235,7 @@ async def post_fake(bt_result_service:BTResultService=Depends(BTResultService)):
         timestamp=timestamp,
         name='fake',
         with_with_cam=False,
-        weight='fake weight',
+        model='fake model',
         memo='memo',
         L=0.7,
         M=0.1,

@@ -164,8 +164,7 @@ class BTPredictor:
             with torch.no_grad():
                 # TODO: imple with_feautres
                 oo = model(t, activate=True)
-            features = None
-            # features = features.detach().cpu().numpy()[0]
+            feature = features.detach().cpu().numpy()[0]
             o = oo.detach().cpu().numpy()[0]
             del oo
         except torch.cuda.OutOfMemoryError as e:
@@ -199,7 +198,7 @@ class BTPredictor:
         if using_gpu:
             torch._C._cuda_clearCublasWorkspaces()
             torch.cuda.empty_cache()
-        return o, features, cam_image
+        return o, feature, cam_image
 
 
 
@@ -289,8 +288,7 @@ class BTPredictService:
 
     async def predict_image(self, checkpoint_path, image_path, with_cam) -> np.ndarray:
         predictor = get_predictor(checkpoint_path)
-        result = await predictor(image_path, with_cam)
-        return result
+        return await predictor(image_path, with_cam)
 
     async def predict(self, task:BTTask):
         if task.status != STATUS_PENDING:
@@ -307,8 +305,8 @@ class BTPredictService:
 
         ok = False
         try:
-            pred, features, cam_image = await self.predict_image(
-                f'data/weights/bt/{task.weight}',
+            pred, feature, cam_image = await self.predict_image(
+                f'data/archifacts/bt/{task.model}/checkpoint.pt',
                 f'data/results/bt/{task.timestamp}/original.jpg',
                 with_cam=task.with_cam,
             )
@@ -332,7 +330,7 @@ class BTPredictService:
                 timestamp=task.timestamp,
                 name=task.name,
                 with_cam=bool(cam_image),
-                weight=task.weight,
+                model=task.model,
                 memo=memo,
                 L=pred[0],
                 M=pred[1],
@@ -341,6 +339,7 @@ class BTPredictService:
             )
             print(f'Predit success: cam:{result.with_cam}')
             self.bt_result_service.add(result)
+            torch.save(feature, f'data/results/bt/{task.timestamp}/feature.pt')
             task.status = STATUS_DONE
 
         await asyncio.sleep(1)

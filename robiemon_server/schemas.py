@@ -10,9 +10,10 @@ class BaseTask(BaseModel):
     mode: str = Field(..., regex=r'^bt$')
 
 
-class Weight(BaseModel):
-    weight: str
+class Model(BaseModel):
+    model: str
     name: str
+
 class Scale(BaseModel):
     label: str
     scale: float
@@ -22,32 +23,16 @@ class Scale(BaseModel):
 
 class BTTask(BaseTask):
     with_cam: bool
-    weight: str
+    model: str
+
+
 class BTResult(BaseModel):
     timestamp: int
     name: str
     with_cam: bool
-    weight: str
+    model: str
     memo: str
     L: float
     M: float
     G: float
     B: float
-
-
-
-# class WeightSchema(pa.SchemaModel):
-#     class Config:
-#         dtype = pydanticModel(Weight)
-
-# class ScaleSchema(pa.SchemaModel):
-#     class Config:
-#         dtype = pydanticModel(Weight)
-
-# class BTTaskSchema(pa.SchemaModel):
-#     class Config:
-#         dtype = pydanticModel(Weight)
-
-# class BTTaskSchema(pa.SchemaModel):
-#     class Config:
-#         dtype = pydanticModel(Weight)

@@ -31,7 +31,6 @@ class WatchedFileHandler(FileSystemEventHandler):
 
     def on_modified(self, event):
         if not event.is_directory and event.src_path == self.filename:
-            print(event.src_path, self.filename)
             self.reload()
 
     @debounce(1)
@@ -129,12 +128,10 @@ def save_dfs(names=None):
                             last_col=col_idx,
                             width=col_width,
                         )
-        print('Save', EXCEL_PATH)
+        print('Saved', EXCEL_PATH)
     except ValueError as e:
         raise e
     finally:
-        # watchdogの変更検知に捕まらないように3秒待ってからlockを開放する
-        # await asyncio.sleep(2)
         print('Lock released')
         global_lock.release()
 
