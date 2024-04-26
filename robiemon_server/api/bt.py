@@ -3,6 +3,7 @@ import io
 import time
 import json
 import asyncio
+from functools import lru_cache
 from concurrent.futures import ThreadPoolExecutor
 
 import joblib
@@ -130,19 +131,43 @@ async def predict(
 
 
 ## UMAP
+
+def prepare_embeddings(model):
+    embeddings_path = f'data/weights/bt/{model}/umap.xlsx'
+    if not os.path.exists(embeddings_path):
+        return None
+    df = pd.read_excel(embeddings_path, index_col=0)
+    df['correct'] = df['diag'] == df['pred']
+    df.to_dict(orient='records')
+    return df.to_dict(orient='records')
+
+
+@router.get('/umap/embeddings/{model}')
+async def get_umap_embeddings(
+    model: str,
+):
+    loop = asyncio.get_running_loop()
+    with ThreadPoolExecutor() as executor:
+        embeddings = await loop.run_in_executor(executor, prepare_embeddings, model)
+    if not embeddings:
+        raise HTTPException(status_code=404)
+    return JSONResponse(content=embeddings)
+
 class ParamUMAP(BaseModel):
     timestamp: int
 
+@lru_cache
+def get_umap_model(model):
+    return joblib.load(f'data/weights/bt/{model}/umap_model.joblib')
+
 def prepare_umap(r):
-    feature = torch.load(f'data/results/bt/{r.timestamp}/feature.pt')
-    umap_model = joblib.load(f'data/weights/bt/{r.model}/umap_model.joblib')
-    df = pd.read_excel(f'data/weights/bt/{r.model}/umap.xlsx', index_col=0)
-    df['correct'] = df['diag'] == df['pred']
+    feature = torch.load(f'data/results/bt/{r.timestamp}/feature.pt').flatten()
+    umap_model = get_umap_model(r.model)
     x, y = umap_model.transform(feature[None, ...])[0].tolist()
-    return df.to_dict(orient='records'), x, y
+    return x, y
 
 @router.post('/umap/{timestamp}')
-async def predict(
+async def post_umap(
     timestamp: int,
     # q: ParamPatchBTResult,
     bt_result_service : BTPredictService = Depends(BTResultService),
@@ -153,10 +178,9 @@ async def predict(
 
     loop = asyncio.get_running_loop()
     with ThreadPoolExecutor() as executor:
-        embs, x, y = await loop.run_in_executor(executor, prepare_umap, r)
+        x, y = await loop.run_in_executor(executor, prepare_umap, r)
 
     return JSONResponse(content={
-        'embeggings': embs,
         'x': x,
         'y': y,
     })
