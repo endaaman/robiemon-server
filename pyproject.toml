@@ -22,14 +22,16 @@ openpyxl = "^3.1.2"
 watchdog = "^4.0.0"
 xlsxwriter = "^3.2.0"
 pandera = "^0.18.3"
+umap-learn = "^0.5.6"
+joblib = "^1.4.0"
+ipython = "^8.23.0"
 
 [tool.poetry.group.dev.dependencies]
 jedi-language-server = "^0.41.2"
+ipython = "^8.23.0"
 
 [build-system]
 
 [tool.taskipy.tasks]
-# gunicorn
-# dev = "gunicorn robiemon_server:app -w 4 --bind 0.0.0.0:3000 --reload"
 dev = "uvicorn robiemon_server:app --reload --host 0.0.0.0 --port 3000"
 prod = "uvicorn robiemon_server:app --host 0.0.0.0 --port 3000"

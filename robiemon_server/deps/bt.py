@@ -163,7 +163,7 @@ class BTPredictor:
         try:
             with torch.no_grad():
                 # TODO: imple with_feautres
-                oo = model(t, activate=True)
+                oo, features = model(t, activate=True, with_feautres=True)
             feature = features.detach().cpu().numpy()[0]
             o = oo.detach().cpu().numpy()[0]
             del oo
@@ -306,7 +306,7 @@ class BTPredictService:
         ok = False
         try:
             pred, feature, cam_image = await self.predict_image(
-                f'data/archifacts/bt/{task.model}/checkpoint.pt',
+                f'data/weights/bt/{task.model}/checkpoint.pt',
                 f'data/results/bt/{task.timestamp}/original.jpg',
                 with_cam=task.with_cam,
             )
