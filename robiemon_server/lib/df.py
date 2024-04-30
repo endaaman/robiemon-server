@@ -114,6 +114,7 @@ schemas = {
     'bt_models': (BTModel, default_bt_models),
 }
 
+
 def save_dfs(names=None):
     if names is None:
         names = list(global_dfs.keys())
@@ -150,6 +151,7 @@ def save_dfs(names=None):
     except ValueError as e:
         raise e
     finally:
+        os.remove(EXCEL_TMP_PATH)
         print('Lock released')
         global_lock.release()
 
@@ -192,11 +194,9 @@ def reload_dfs():
             try:
                 df = pd.read_excel(EXCEL_PATH, sheet_name=name, dtype=dtype, index_col=None)
                 loaded = True
-                print('Loaded table:', name)
             except ValueError as e:
                 print('ERROR:', e)
                 df = empry_df_by_schema(S, values)
-                print('Create empty table:', name)
                 table_created = True
             if loaded:
                 # fillna for string
@@ -204,11 +204,12 @@ def reload_dfs():
                     if prop['type'] == 'string':
                         df[k] = df[k].fillna('')
             global_dfs[name] = df
-            if table_created:
-                save_dfs()
+            print('Created' if table_created else 'Loaded', 'table', name)
             print(df)
-            print()
         print(f'Loaded database: {EXCEL_PATH}')
+        if table_created:
+            print('save tables for inital')
+            save_dfs()
 
 
 
