@@ -14,7 +14,7 @@ from PIL import Image
 
 from ..deps.task import TaskService
 from ..deps.scale import ScaleService
-from ..deps.bt import BTResultService
+from ..deps.bt import BTResultService, BTModelService
 
 from ..lib import asdicts
 from ..lib.worker import poll, wait
@@ -34,34 +34,25 @@ router.include_router(bt_router)
 
 ## Status
 
-bt_models = [
-    {
-        'label': 'ConvNeXt V2 Nano',
-        'name': 'convnextv2_nano_v4',
-    },
-    {
-        'label': 'ResNet RS50',
-        'name': 'resnetrs50_v4',
-    },
-]
-
 
 class Status:
     def __init__(self,
-                 bt_result_service=Depends(BTResultService),
                  task_service=Depends(TaskService),
                  scale_service=Depends(ScaleService),
+                 bt_result_service=Depends(BTResultService),
+                 bt_model_service=Depends(BTModelService),
                  ):
-        self.scale_service = scale_service
         self.task_service = task_service
+        self.scale_service = scale_service
         self.bt_result_service = bt_result_service
+        self.bt_model_service = bt_model_service
 
     async def get(self):
         return {
             'scales': asdicts(self.scale_service.all()),
             'tasks': asdicts(self.task_service.all()),
             'bt_results': asdicts(self.bt_result_service.all()),
-            'bt_models': bt_models,
+            'bt_models': asdicts(self.bt_model_service.all()),
         }
 
 

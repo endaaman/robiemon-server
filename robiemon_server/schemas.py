@@ -20,6 +20,11 @@ class Scale(BaseModel):
     enabled: bool
 
 
+class BTModel(BaseModel):
+    name: str
+    label: str
+    enabled: bool
+
 
 class BTTask(BaseTask):
     with_cam: bool

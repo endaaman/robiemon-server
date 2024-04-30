@@ -22,9 +22,9 @@ openpyxl = "^3.1.2"
 watchdog = "^4.0.0"
 xlsxwriter = "^3.2.0"
 pandera = "^0.18.3"
-umap-learn = "^0.5.6"
-joblib = "^1.4.0"
 ipython = "^8.23.0"
+umap-learn = "0.5.6"
+joblib = "1.4.0"
 
 [tool.poetry.group.dev.dependencies]
 jedi-language-server = "^0.41.2"

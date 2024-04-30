@@ -23,7 +23,7 @@ from pytorch_grad_cam.utils.model_targets import ClassifierOutputTarget
 
 from .df import BaseDFDriver
 from ..lib.worker import poll, wait
-from ..schemas import BTResult, BTTask
+from ..schemas import BTResult, BTTask, BTModel
 from ..constants import *
 
 
@@ -202,6 +202,22 @@ class BTPredictor:
 
 
 
+class BTModelDriver(BaseDFDriver):
+    def get_name(self):
+        return 'bt_models'
+
+    def get_cls(self):
+        return BTModel
+
+
+class BTModelService:
+    def __init__(self, driver:BTModelDriver=Depends(BTModelDriver)):
+        self.driver = driver
+
+    def all(self):
+        return self.driver.all()
+
+
 @lru_cache
 def get_predictor(checkpoint_path):
     return BTPredictor(checkpoint_path)
@@ -301,7 +317,7 @@ class BTPredictService:
 
         memo = ''
 
-        print(task)
+        print('Processing task:', task)
 
         ok = False
         try:
