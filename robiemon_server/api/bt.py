@@ -17,7 +17,7 @@ from PIL import Image
 
 from ..deps.task import TaskService, get_last_timestamp
 from ..deps.scale import ScaleService
-from ..deps.bt import BTResultService, BTPredictService
+from ..deps.bt import BTResultService, BTPredictService, BTModelService
 from ..schemas import BTTask, BTResult
 
 from ..lib import asdicts, get_hash
@@ -31,6 +31,18 @@ router = APIRouter(
     tags=['bt'],
 )
 
+
+@router.get('/models')
+async def get_bt_models(
+    bt_model_service:BTModelService=Depends(BTModelService),
+):
+    return bt_model_service.all()
+
+@router.get('/results')
+async def get_bt_results(
+    bt_result_service:BTResultService=Depends(BTResultService),
+):
+    return bt_result_service.all()
 
 @router.delete('/results/{timestamp}')
 async def delete_bt_result(

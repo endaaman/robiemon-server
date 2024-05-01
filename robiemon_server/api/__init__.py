@@ -87,6 +87,11 @@ async def status_sse(
 
 
 ## Tasks
+@router.get('/tasks')
+async def get_task(
+    task_service:TaskService=Depends(TaskService),
+):
+    return task_service.all()
 
 @router.delete('/tasks/{timestamp}')
 async def delete_task(
@@ -103,6 +108,12 @@ async def delete_task(
 
 
 ## Scale
+@router.get('/scales')
+async def get_scales(
+    scale_service:ScaleService=Depends(ScaleService),
+):
+    return scale_service.all()
+
 @router.delete('/scales/{index}')
 async def delete_scale(
     index: int,
