@@ -141,15 +141,19 @@ async def predict(
     })
 
 
-
 ## UMAP
 
+@lru_cache
 def prepare_embeddings(model):
     embeddings_path = f'data/weights/bt/{model}/umap.xlsx'
     if not os.path.exists(embeddings_path):
         return None
     df = pd.read_excel(embeddings_path, index_col=0)
     df['correct'] = df['diag'] == df['pred']
+
+    df_origin = pd.read_excel('data/meta_origin.xlsx', index_col=0)
+    df = pd.merge(df, df_origin, on='name', how='left')
+    df['origin'] = df['origin'].fillna('')
     df.to_dict(orient='records')
     return df.to_dict(orient='records')
 
@@ -164,6 +168,17 @@ async def get_umap_embeddings(
     if not embeddings:
         raise HTTPException(status_code=404)
     return JSONResponse(content=embeddings)
+
+@lru_cache
+def prepare_meta_origins():
+    return pd.read_excel('data/meta_origin.xlsx', index_col=0)['origin'].to_dict()
+
+@router.get('/umap/meta_origins')
+async def get_meta_origins():
+    loop = asyncio.get_running_loop()
+    with ThreadPoolExecutor() as executor:
+        origins = await loop.run_in_executor(executor, prepare_meta_origins)
+    return JSONResponse(content=origins)
 
 class ParamUMAP(BaseModel):
     timestamp: int

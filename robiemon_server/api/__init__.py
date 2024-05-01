@@ -29,12 +29,13 @@ router = APIRouter(
     tags=['api'],
 )
 
+@router.get('/')
+async def root():
+    return JSONResponse(content={'message': 'This is ROBIEMON AI server ^o^'})
 
 router.include_router(bt_router)
 
 ## Status
-
-
 class Status:
     def __init__(self,
                  task_service=Depends(TaskService),
