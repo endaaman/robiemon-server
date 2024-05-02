@@ -44,6 +44,16 @@ async def get_bt_results(
 ):
     return bt_result_service.all()
 
+@router.get('/results/{timestamp}')
+async def get_bt_results(
+    timestamp:int,
+    bt_result_service:BTResultService=Depends(BTResultService),
+):
+    r = bt_result_service.find(timestamp=timestamp)
+    if not r:
+        raise HTTPException(status_code=404)
+    return r
+
 @router.delete('/results/{timestamp}')
 async def delete_bt_result(
     timestamp: int,
