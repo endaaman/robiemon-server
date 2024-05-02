@@ -348,6 +348,7 @@ class BTPredictService:
                 with_cam=bool(cam_image),
                 model=task.model,
                 memo=memo,
+                pred='LMGB'[np.argmax(pred)],
                 L=pred[0],
                 M=pred[1],
                 G=pred[2],

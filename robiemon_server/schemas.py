@@ -37,6 +37,7 @@ class BTResult(BaseModel):
     with_cam: bool
     model: str
     memo: str
+    pred: str
     L: float
     M: float
     G: float

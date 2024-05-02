@@ -39,7 +39,7 @@ async def get_bt_models(
     return bt_model_service.all()
 
 @router.get('/results')
-async def get_bt_results(
+async def get_bt_result(
     bt_result_service:BTResultService=Depends(BTResultService),
 ):
     return bt_result_service.all()
