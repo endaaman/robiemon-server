@@ -12,6 +12,7 @@ from PIL.Image import Image as ImageType
 import cv2
 import numpy as np
 import pandas as pd
+from matplotlib import cm as colormap
 import torch
 import timm
 from torch import nn
@@ -31,7 +32,7 @@ Image.MAX_IMAGE_PIXELS = None
 
 
 using_gpu = torch.cuda.is_available()
-print('GPU mode' if using_gpu else 'CPU mode')
+# print('GPU mode' if using_gpu else 'CPU mode')
 device = torch.device('cuda' if using_gpu else 'cpu')
 
 
@@ -175,7 +176,7 @@ class BTPredictor:
             torch.cuda.empty_cache()
             raise e
 
-        cam_image = None
+        cam_mask = None
         if with_cam:
             try:
                 gradcam = CAM.GradCAMPlusPlus(
@@ -186,8 +187,7 @@ class BTPredictor:
                 )
                 pred_id = np.argmax(o)
                 targets = [ClassifierOutputTarget(pred_id)]
-                mask = gradcam(input_tensor=t, targets=targets)[0]
-                cam_image = Image.fromarray((mask * 255).astype(np.uint8))
+                cam_mask = gradcam(input_tensor=t, targets=targets)[0]
                 del gradcam
             except torch.cuda.OutOfMemoryError as e:
                 del gradcam
@@ -198,7 +198,7 @@ class BTPredictor:
         if using_gpu:
             torch._C._cuda_clearCublasWorkspaces()
             torch.cuda.empty_cache()
-        return o, feature, cam_image
+        return o, feature, cam_mask
 
 
 
@@ -321,13 +321,19 @@ class BTPredictService:
 
         ok = False
         try:
-            pred, feature, cam_image = await self.predict_image(
+            pred, feature, cam_mask = await self.predict_image(
                 f'data/weights/bt/{task.model}/checkpoint.pt',
                 f'data/results/bt/{task.timestamp}/original.jpg',
                 with_cam=task.with_cam,
             )
-            if cam_image:
-                cam_image.save(f'data/results/bt/{task.timestamp}/cam.png')
+            if cam_mask:
+                m = cam_mask * 255
+                cam_normal = Image.fromarray(m.astype(np.uint8))
+                cam_normal.save(f'data/results/bt/{task.timestamp}/cam.png')
+                cam_jet = Image.fromarray(colormap.jet(m).astype(np.uint8))
+                cam_jet.save(f'data/results/bt/{task.timestamp}/cam_jet.png')
+                cam_inferno = Image.fromarray(colormap.inferno(m).astype(np.uint8))
+                cam_inferno.save(f'data/results/bt/{task.timestamp}/cam_inferno.png')
             else:
                 if task.with_cam:
                     memo = 'Too large to generate CAM.'
@@ -345,7 +351,7 @@ class BTPredictService:
             result = BTResult(
                 timestamp=task.timestamp,
                 name=task.name,
-                with_cam=bool(cam_image),
+                with_cam=cam_mask is not None,
                 model=task.model,
                 memo=memo,
                 pred='LMGB'[np.argmax(pred)],

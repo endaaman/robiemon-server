@@ -35,3 +35,4 @@ ipython = "^8.23.0"
 [tool.taskipy.tasks]
 dev = "uvicorn robiemon_server:app --reload --host 0.0.0.0 --port 3000"
 prod = "uvicorn robiemon_server:app --host 0.0.0.0 --port 3000"
+batch = "python robiemon_server/batch.py"
