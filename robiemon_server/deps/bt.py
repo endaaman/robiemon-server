@@ -326,7 +326,7 @@ class BTPredictService:
                 f'data/results/bt/{task.timestamp}/original.jpg',
                 with_cam=task.with_cam,
             )
-            if cam_mask:
+            if cam_mask is not None:
                 m = cam_mask * 255
                 cam_normal = Image.fromarray(m.astype(np.uint8))
                 cam_normal.save(f'data/results/bt/{task.timestamp}/cam.png')
