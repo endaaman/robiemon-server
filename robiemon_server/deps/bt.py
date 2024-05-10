@@ -327,12 +327,13 @@ class BTPredictService:
                 with_cam=task.with_cam,
             )
             if cam_mask is not None:
-                m = cam_mask * 255
-                cam_normal = Image.fromarray(m.astype(np.uint8))
+                cam_normal = Image.fromarray(np.uint8(cam_mask*255))
                 cam_normal.save(f'data/results/bt/{task.timestamp}/cam.png')
-                cam_jet = Image.fromarray(colormap.jet(m).astype(np.uint8))
+
+                cam_jet = Image.fromarray(np.uint8(colormap.jet(cam_mask)*255))
                 cam_jet.save(f'data/results/bt/{task.timestamp}/cam_jet.png')
-                cam_inferno = Image.fromarray(colormap.inferno(m).astype(np.uint8))
+
+                cam_inferno = Image.fromarray(np.uint8(colormap.inferno(cam_mask)*255))
                 cam_inferno.save(f'data/results/bt/{task.timestamp}/cam_inferno.png')
             else:
                 if task.with_cam:
