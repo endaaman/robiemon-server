@@ -55,56 +55,11 @@ def shutdown_event():
     unlock()
     print('done unlock')
     stop_watching_dfs()
-    # print('stop watch')
-    # save_dfs()
-    # print('save dfs')
-
-
-class Foo1:
-    def __init__(self, v):
-        print('init foo1 v:', v)
-        self.name = time.ctime()
 
 @app.get('/')
-def get_root(foo1=Depends(Foo1)):
-    print(foo1.name)
+def get_root():
     return JSONResponse(content={
         'message': 'Welcome to ROBIEMON server.'
     })
-
-
-@app.post('/sleep')
-async def post_sleep(t:int=Form()):
-    async def sl():
-        print('start sleep')
-        await asyncio.sleep(t)
-        print('center')
-        time.sleep(t)
-        print('end sleep')
-    add_coro(sl)
-    return JSONResponse(content={
-        'count': get_proc_count()
-    })
-
-@app.post('/thread')
-async def thread(t:int=Form()):
-    def th():
-        print('start sleep')
-        time.sleep(t)
-        print('end sleep')
-    loop = asyncio.get_running_loop()
-    with ThreadPoolExecutor() as executor:
-        await loop.run_in_executor(executor, th)
-    return JSONResponse(content={'message': 'ok'})
-
-async def delayed():
-    await asyncio.sleep(5)
-    print('done 3s')
-
-@app.get('/after')
-async def thread():
-    asyncio.create_task(delayed())
-    return JSONResponse(content={'message': 'ok'})
-
 
 app.include_router(api_router)
