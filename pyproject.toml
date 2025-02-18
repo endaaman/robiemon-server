@@ -1,3 +1,31 @@
+[project]
+name = "robiemon_server"
+version = "0.0.1"
+description = ""
+requires-python = "==3.11.*"
+dependencies = [
+    "fastapi[uvicorn]>=0.109.0",
+    "pydantic>=2",
+    "torch>=2.1.2",
+    "timm>=0.9.12",
+    "opencv-python-headless>=4.9.0.80",
+    "grad-cam>=1.5.0",
+    "numpy>=1.26.3",
+    "python-multipart>=0.0.6",
+    "uvicorn[standard]>=0.27.0.post1",
+    "pillow>=10.2.0",
+    "taskipy>=1.12.2",
+    "pandas>=2.2.2",
+    "openpyxl>=3.1.2",
+    "watchdog>=4.0.0",
+    "xlsxwriter>=3.2.0",
+    "pandera>=0.18.3",
+    "ipython>=8.23.0",
+    "umap-learn==0.5.6",
+    "joblib==1.4.0",
+    "jedi-language-server>=0.41.2",
+]
+
 [tool.poetry]
 name = "robiemon_server"
 version = "0.0.1"
@@ -29,8 +57,6 @@ joblib = "1.4.0"
 [tool.poetry.group.dev.dependencies]
 jedi-language-server = "^0.41.2"
 ipython = "^8.23.0"
-
-[build-system]
 
 [tool.taskipy.tasks]
 dev = "uvicorn robiemon_server:app --reload --host 0.0.0.0 --port 3000"

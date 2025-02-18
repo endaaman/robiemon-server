@@ -6,8 +6,8 @@ import pandera as pa
 class BaseTask(BaseModel):
     timestamp: int
     name: str
-    status: str = Field(..., regex=r'^pending|processing|done$')
-    mode: str = Field(..., regex=r'^bt$')
+    status: str = Field(..., pattern=r'^pending|processing|done$')
+    mode: str = Field(..., pattern=r'^bt$')
 
 
 class Model(BaseModel):
